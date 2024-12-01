@@ -139,23 +139,39 @@ void update_grid(char* update_message) {
             if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
                 grid[y][x] = '*'; // Represent aliens with '*'
             }
-        } else if (strncmp(line, "LASER", 5) == 0) {
-            int x, y;
-            char direction[10];
-            sscanf(line, "LASER %d %d %s", &x, &y, direction);
-            
-            if (strcmp(direction, "HORIZONTAL") == 0) {
-                // Draw horizontal laser
-                for (int i = x; i < GRID_WIDTH; i++) {
-                    grid[y][i] = LASER_HORIZONTAL;
+        } else if (strncmp(line, "LASER", 5) == 0) { 
+                int x, y;
+                char direction[10];
+                char player_id;
+                sscanf(line, "LASER %d %d %s %c", &x, &y, direction, &player_id);
+                
+                if (strcmp(direction, "HORIZONTAL") == 0) {
+                    // A and H shoot right
+                    if (player_id == 'A' || player_id == 'H') {
+                        for (int i = x; i <= GRID_WIDTH; i++) {
+                            grid[y][i] = LASER_HORIZONTAL;
+                        }
+                    }
+                    // D and F shoot left
+                    else if (player_id == 'D' || player_id == 'F') {
+                        for (int i = x; i >= 0; i--) {
+                            grid[y][i] = LASER_HORIZONTAL;
+                        }
+                    }
+                } else if (strcmp(direction, "VERTICAL") == 0) {
+                    // B and C shoot down
+                    if (player_id == 'E' || player_id == 'G') {
+                        for (int i = y; i <= GRID_HEIGHT; i++) {
+                            grid[i][x] = LASER_VERTICAL;
+                        }
+                    }
+                    // E and G shoot up
+                    else if (player_id == 'B' || player_id == 'C') {
+                        for (int i = y; i >= 0; i--) {
+                            grid[i][x] = LASER_VERTICAL;
+                        }
+                    }
                 }
-            } else if (strcmp(direction, "VERTICAL") == 0) {
-                // Draw vertical laser
-                for (int i = y; i < GRID_HEIGHT; i++) {
-                    grid[i][x] = LASER_VERTICAL;
-                }
-            }
-            //mvprintw(0,0,"Drawing laser at (%d,%d) direction: %s\n", x, y, direction); // Debug
         } else if (strncmp(line, "SCORE", 5) == 0) {
             char id;
             int player_score;
@@ -167,9 +183,9 @@ void update_grid(char* update_message) {
                 //mvprintw(DEBUG_LINE, 40, "Score update: Player %c = %d", id, player_score);
             }
         }
-        // Move to the next line
-        line = strtok(NULL, "\n");
-    }
+            // Move to the next line
+            line = strtok(NULL, "\n");
+        }
 }
 
 void draw_scores() {
