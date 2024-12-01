@@ -394,17 +394,14 @@ void check_laser_collisions() {
                 }
                 // For D and F (right side), laser goes left
                 else if (laser->player_id == 'D' || laser->player_id == 'F') {
-                    for (int x = laser->x; x >= 0; x--) {
-                        // Check for aliens in this line
-                        for (int a = 0; a < MAX_ALIENS; a++) {
-                            if (aliens[a].active && aliens[a].x == x && aliens[a].y == laser->y) {
-                                aliens[a].active = 0;
-                                // Update player score
-                                for (int p = 0; p < MAX_PLAYERS; p++) {
-                                    if (players[p].player_id == laser->player_id) {
-                                        players[p].score += 1;
-                                        break;
-                                    }
+                    for (int a = 0; a < MAX_ALIENS; a++) {
+                        if (aliens[a].active && aliens[a].y == laser->y) {
+                            aliens[a].active = 0;
+                            // Update player score
+                            for (int p = 0; p < MAX_PLAYERS; p++) {
+                                if (players[p].player_id == laser->player_id) {
+                                    players[p].score += 1;
+                                    break;
                                 }
                             }
                         }
@@ -413,10 +410,8 @@ void check_laser_collisions() {
             } else if (strcmp(laser->direction, "VERTICAL") == 0) {
                 // For B and C (top), laser goes down
                 if (laser->player_id == 'E' || laser->player_id == 'G') {
-                    for (int y = laser->y; y < GRID_HEIGHT; y++) {
-                        // Check for aliens in this line
                         for (int a = 0; a < MAX_ALIENS; a++) {
-                            if (aliens[a].active && aliens[a].x == laser->x && aliens[a].y == y) {
+                            if (aliens[a].active && aliens[a].x == laser->x) {
                                 aliens[a].active = 0;
                                 // Update player score
                                 for (int p = 0; p < MAX_PLAYERS; p++) {
@@ -427,21 +422,17 @@ void check_laser_collisions() {
                                 }
                             }
                         }
-                    }
                 }
                 // For E and G (bottom), laser goes up
                 else if (laser->player_id == 'B' || laser->player_id == 'C') {
-                    for (int y = laser->y; y >= 0; y--) {
-                        // Check for aliens in this line
-                        for (int a = 0; a < MAX_ALIENS; a++) {
-                            if (aliens[a].active && aliens[a].x == laser->x && aliens[a].y == y) {
-                                aliens[a].active = 0;
-                                // Update player score
-                                for (int p = 0; p < MAX_PLAYERS; p++) {
-                                    if (players[p].player_id == laser->player_id) {
-                                        players[p].score += 1;
-                                        break;
-                                    }
+                    for (int a = 0; a < MAX_ALIENS; a++) {
+                        if (aliens[a].active && aliens[a].x == laser->x) {
+                            aliens[a].active = 0;
+                            // Update player score
+                            for (int p = 0; p < MAX_PLAYERS; p++) {
+                                if (players[p].player_id == laser->player_id) {
+                                    players[p].score += 1;
+                                    break;
                                 }
                             }
                         }
