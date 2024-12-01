@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include "config.h"
 
-#define BUFFER_SIZE 4096
 #define GRID_WIDTH 20
 #define GRID_HEIGHT 20
 #define MAX_PLAYERS 8
@@ -112,8 +111,8 @@ void update_grid(char* update_message) {
         players[i].active = 0;
     }
 
-    move(DEBUG_LINE, 0);
-    clrtoeol();
+    //move(DEBUG_LINE, 0);
+    //clrtoeol();
 
      // Parse the message line by line
     char* line = strtok(update_message, "\n");
@@ -147,16 +146,16 @@ void update_grid(char* update_message) {
             
             if (strcmp(direction, "HORIZONTAL") == 0) {
                 // Draw horizontal laser
-                for (int i = 0; i < GRID_WIDTH; i++) {
+                for (int i = x; i < GRID_WIDTH; i++) {
                     grid[y][i] = LASER_HORIZONTAL;
                 }
             } else if (strcmp(direction, "VERTICAL") == 0) {
                 // Draw vertical laser
-                for (int i = 0; i < GRID_HEIGHT; i++) {
+                for (int i = y; i < GRID_HEIGHT; i++) {
                     grid[i][x] = LASER_VERTICAL;
                 }
             }
-            printf("Drawing laser at (%d,%d) direction: %s\n", x, y, direction); // Debug
+            //mvprintw(0,0,"Drawing laser at (%d,%d) direction: %s\n", x, y, direction); // Debug
         } else if (strncmp(line, "SCORE", 5) == 0) {
             char id;
             int player_score;

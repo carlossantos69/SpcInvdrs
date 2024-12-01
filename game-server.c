@@ -1,5 +1,4 @@
-// game-server.c
-
+#include <ncurses.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,7 +24,6 @@ typedef struct {
     char player_id;
     int x;
     int y;
-    char region_id;
     int score;
     time_t last_fire_time;
 } Player;
@@ -147,8 +145,8 @@ int is_valid_move(Player* player, const char* direction) {
     else if (strcmp(direction, "UP") == 0) new_y--;
     else if (strcmp(direction, "DOWN") == 0) new_y++;
     
-    // Check movement based on region
-    switch(player->region_id) {
+    // Check movement based on id
+    switch(player->player_id) {
         case 'A': // Left side vertical movement
             if (new_x != 0) return 0;  // Must stay in leftmost column
             return (new_y >= BORDER_OFFSET && new_y <= GRID_HEIGHT - BORDER_OFFSET - 1);
@@ -226,7 +224,6 @@ void initialize_player_position(Player* player, char id) {
             player->y = GRID_HEIGHT - 2;
             break;
     }
-    player->region_id = id;
     printf("Initialized player %c at position (%d, %d)\n", id, player->x, player->y);
 }
 
@@ -246,11 +243,11 @@ void process_client_message(char* message, char* response) {
                 // Initialize player position
                 initialize_player_position(&players[i], new_id);
                 
-                // Send back player ID and region
-                sprintf(response, "%c %c", new_id, players[i].region_id);
+                // Send back player ID
+                sprintf(response, "%c", new_id);
                 
                 printf("New player %c initialized at (%d,%d)\n", 
-                       new_id, players[i].x+1, players[i].y+1);
+                       new_id, players[i].x, players[i].y);
                 
                 // Send updated game state to display
                 send_game_state();
@@ -277,7 +274,7 @@ void process_client_message(char* message, char* response) {
         
         if (player) {
             
-            // Check if move is valid for player's region
+            // Check if move is valid for player's id
             if (is_valid_move(player, direction)) {
                 // Update position
                 if (strcmp(direction, "LEFT") == 0) player->x--;
@@ -295,6 +292,7 @@ void process_client_message(char* message, char* response) {
         }
     } else if (strncmp(message, "ZAP", 3) ==0) {
         char player_id = message[4];
+
         // Find the player
         Player* player = NULL;
         for (int i =0; i < MAX_PLAYERS; i++) {
@@ -303,6 +301,7 @@ void process_client_message(char* message, char* response) {
                 break;
             }
         }
+
         if (player) {
             time_t current_time = time(NULL);
             if (current_time - player->last_fire_time < LASER_COOLDOWN) {
@@ -318,18 +317,35 @@ void process_client_message(char* message, char* response) {
                 return;
             }
 
-            // Determine laser direction based on player's region
+            // Determine laser direction based on player's id
             if (player->player_id == 'A' || player->player_id == 'H' || player->player_id == 'D' || player->player_id == 'F') {
-                strcpy(lasers[laser_index].direction, "HORIZONTAL");
+                strcpy(lasers[laser_index].direction, "HORIZONTAL R");
+                if (player->player_id == 'A' || player->player_id == 'H') {
+                    lasers[laser_index].x = player->x +1; // Start right of player
+                    lasers[laser_index].y = player->y;
+                    printf("Player %c fired a laser from %d, %d\n", player_id, lasers[laser_index].x, lasers[laser_index].y);
+                } else {
+                    lasers[laser_index].x = player->x;  // Start left of player
+                    lasers[laser_index].x -= 1;
+                    lasers[laser_index].y = player->y;
+                }
             } else {
                 strcpy(lasers[laser_index].direction, "VERTICAL");
+                if (player->player_id == 'B' || player->player_id == 'C') {
+                    lasers[laser_index].y = player->y;
+                    lasers[laser_index].y += 1;  // Start above the player
+                    lasers[laser_index].x = player->x;
+                } else {
+                    lasers[laser_index].y = player->y;
+                    lasers[laser_index].y -= 1;  // Start below the player
+                    lasers[laser_index].x = player->x;
+                }
             }
 
             // Initialize laser position
-            lasers[laser_index].x = player->x;
-            lasers[laser_index].y = player->y;
             lasers[laser_index].active = 1;
             lasers[laser_index].player_id = player_id;
+            lasers[laser_index].creation_time = current_time;
 
             printf("Player %c fired a laser %s.\n", player_id, lasers[laser_index].direction);
             snprintf(response, BUFFER_SIZE, "OK %d", player->score);
@@ -364,7 +380,7 @@ void check_laser_collisions() {
             // Traverse the grid based on laser direction
             if (strcmp(laser->direction, "HORIZONTAL") == 0) {
                 // Send the full laser line information
-                for (int x = 0; x < GRID_WIDTH; x++) {
+                for (int x = laser->x; x < GRID_WIDTH; x++) {
                     // Check for aliens in this line
                     for (int a = 0; a < MAX_ALIENS; a++) {
                         if (aliens[a].active && aliens[a].x == x && aliens[a].y == laser->y) {
@@ -381,7 +397,7 @@ void check_laser_collisions() {
                 }
             } else if (strcmp(laser->direction, "VERTICAL") == 0) {
                 // Vertical laser traverses full height
-                for (int y = 0; y < GRID_HEIGHT; y++) {
+                for (int y = laser->y; y < GRID_HEIGHT; y++) {
                     // Check for aliens in this line
                     for (int a = 0; a < MAX_ALIENS; a++) {
                         if (aliens[a].active && aliens[a].x == laser->x && aliens[a].y == y) {
@@ -401,6 +417,8 @@ void check_laser_collisions() {
         }
     }
 }
+
+
 
 void update_alien_positions() {
     time_t current_time = time(NULL);
@@ -442,9 +460,7 @@ void update_alien_positions() {
 }
 
 // Add near other function declarations
-void update_game_state() {
-    time_t current_time = time(NULL);
-    
+void update_game_state() {    
     // Update alien positions (existing functionality)
     update_alien_positions();
     
@@ -452,9 +468,12 @@ void update_game_state() {
     check_laser_collisions();
     
     // Deactivate lasers after 0.5 seconds
+    time_t current_time = time(NULL);
+
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (lasers[i].active && (current_time - lasers[i].creation_time >= 1)) {
             lasers[i].active = 0;
+            //printf("Player %c last fire time: %ld\n", players[i].player_id, players[i].last_fire_time);
         }
     }
 }

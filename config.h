@@ -13,7 +13,7 @@
 #define GRID_HEIGHT 20
 #define MAX_PLAYERS 8
 #define MAX_ALIENS 33  // 1/3 of grid area
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 2048
 
 // Message Types
 #define MSG_CONNECT 1

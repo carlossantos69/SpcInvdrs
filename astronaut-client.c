@@ -14,7 +14,6 @@ void* requester;
 
 // Player state
 char player_id = '\0';
-char region_id = '\0';
 int score = 0;
 
 void send_connect_message() {
@@ -47,8 +46,8 @@ void send_connect_message() {
         }
         
         // Normal connection success handling
-        sscanf(buffer, "%c %c", &player_id, &region_id);
-        mvprintw(0, 0, "Playing as Astronaut %c in region %c", player_id, player_id);
+        sscanf(buffer, "%c", &player_id);
+        mvprintw(0, 0, "Playing as Astronaut %c", player_id);
         refresh();
     } else {
         perror("Failed to receive player ID");
@@ -94,12 +93,7 @@ void handle_key_input() {
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case ' ':
-            // Assuming players in regions A, D, F, H move vertically, and others horizontally
-            if (region_id == 'A' || region_id == 'D' || region_id == 'F' || region_id == 'H') {
-                snprintf(buffer, sizeof(buffer), "ZAP %c HORIZONTAL", player_id);
-            } else {
-                snprintf(buffer, sizeof(buffer), "ZAP %c VERTICAL", player_id);
-            }
+            snprintf(buffer, sizeof(buffer), "ZAP %c", player_id);
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case 'q':
