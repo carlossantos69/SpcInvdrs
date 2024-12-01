@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "config.h"
+#include <time.h>
 
 #define GRID_WIDTH 20
 #define GRID_HEIGHT 20
@@ -38,10 +39,15 @@ typedef struct {
     int active;  // flag to track if we've seen this player
 } Player;
 
+typedef struct {
+    char ch;
+    time_t laser_time; // Timestamp when the laser was drawn
+} Cell;
+
 Player players[MAX_PLAYERS];  // Array to store players
 
 // Game state representation
-char grid[GRID_HEIGHT][GRID_WIDTH];
+Cell grid[GRID_HEIGHT][GRID_WIDTH];
 
 void initialize_display() {
     // Initialize ncurses mode
@@ -61,7 +67,7 @@ void initialize_display() {
     // Initialize grid to empty spaces
     for (int y = 0; y < GRID_HEIGHT; y++) {
         for (int x = 0; x < GRID_WIDTH; x++) {
-            grid[y][x] = ' ';
+            grid[y][x].ch = ' ';
         }
     }
 
@@ -103,7 +109,7 @@ void update_grid(char* update_message) {
     // Clear the grid first
     for (int y = 0; y < GRID_HEIGHT; y++) {
         for (int x = 0; x < GRID_WIDTH; x++) {
-            grid[y][x] = ' ';
+            grid[y][x].ch = ' ';
         }
     }
 
@@ -123,7 +129,7 @@ void update_grid(char* update_message) {
             sscanf(line, "PLAYER %c %d %d", &id, &x, &y);
             
             if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
-                grid[y][x] = id;
+                grid[y][x].ch = id;
                 // Update player status
                 int idx = id - 'A';
                 if (idx >= 0 && idx < MAX_PLAYERS) {
@@ -137,41 +143,41 @@ void update_grid(char* update_message) {
             int x, y;
             sscanf(line, "ALIEN %d %d", &x, &y);
             if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
-                grid[y][x] = '*'; // Represent aliens with '*'
+                grid[y][x].ch = '*'; // Represent aliens with '*'
             }
-        } else if (strncmp(line, "LASER", 5) == 0) { 
-                int x, y;
-                char direction[10];
-                char player_id;
-                sscanf(line, "LASER %d %d %s %c", &x, &y, direction, &player_id);
-                
-                if (strcmp(direction, "HORIZONTAL") == 0) {
-                    // A and H shoot right
-                    if (player_id == 'A' || player_id == 'H') {
-                        for (int i = x; i <= GRID_WIDTH; i++) {
-                            grid[y][i] = LASER_HORIZONTAL;
-                        }
+        } else if (strncmp(line, "LASER", 5) == 0) {
+            int x, y;
+            char direction[10];
+            char player_id;
+            sscanf(line, "LASER %d %d %s %c", &x, &y, direction, &player_id);
+            
+            time_t now = time(NULL);
+            
+            if (strcmp(direction, "HORIZONTAL") == 0) {
+                if (player_id == 'A' || player_id == 'H') {
+                    for (int i = x; i < GRID_WIDTH; i++) {
+                        grid[y][i].ch = LASER_HORIZONTAL;
+                        grid[y][i].laser_time = now;
                     }
-                    // D and F shoot left
-                    else if (player_id == 'D' || player_id == 'F') {
-                        for (int i = x; i >= 0; i--) {
-                            grid[y][i] = LASER_HORIZONTAL;
-                        }
-                    }
-                } else if (strcmp(direction, "VERTICAL") == 0) {
-                    // B and C shoot down
-                    if (player_id == 'E' || player_id == 'G') {
-                        for (int i = y; i <= GRID_HEIGHT; i++) {
-                            grid[i][x] = LASER_VERTICAL;
-                        }
-                    }
-                    // E and G shoot up
-                    else if (player_id == 'B' || player_id == 'C') {
-                        for (int i = y; i >= 0; i--) {
-                            grid[i][x] = LASER_VERTICAL;
-                        }
+                } else if (player_id == 'D' || player_id == 'F') {
+                    for (int i = x; i >= 0; i--) {
+                        grid[y][i].ch = LASER_HORIZONTAL;
+                        grid[y][i].laser_time = now;
                     }
                 }
+            } else if (strcmp(direction, "VERTICAL") == 0) {
+                if (player_id == 'E' || player_id == 'G') {
+                    for (int i = y; i < GRID_HEIGHT; i++) {
+                        grid[i][x].ch = LASER_VERTICAL;
+                        grid[i][x].laser_time = now;
+                    }
+                } else if (player_id == 'B' || player_id == 'C') {
+                    for (int i = y; i >= 0; i--) {
+                        grid[i][x].ch = LASER_VERTICAL;
+                        grid[i][x].laser_time = now;
+                    }
+                }
+            }
         } else if (strncmp(line, "SCORE", 5) == 0) {
             char id;
             int player_score;
@@ -239,26 +245,43 @@ void draw_scores() {
 
 
 void draw_grid(void) {
-    // Draw grid contents
+    time_t now = time(NULL);
+    double elapsed;
+    
     for (int y = 0; y < GRID_HEIGHT; y++) {
         for (int x = 0; x < GRID_WIDTH; x++) {
-            char ch = grid[y][x];
+            char ch = grid[y][x].ch;
             int display_y = y + 3;
             int display_x = x + 4;
-            
+
+            // Clear lasers after LASER_DISPLAY_TIME
+            if ((ch == LASER_HORIZONTAL || ch == LASER_VERTICAL) && grid[y][x].laser_time > 0) {
+                elapsed = difftime(now, grid[y][x].laser_time);
+                if (elapsed >= LASER_DISPLAY_TIME / 1000000.0) {
+                    grid[y][x].ch = ' ';
+                    grid[y][x].laser_time = 0;
+                    mvaddch(display_y, display_x, ' ');
+                    continue;
+                }
+            }
+
             if (ch == '*') {
+                // Draw alien
                 attron(COLOR_PAIR(COLOR_ALIEN));
                 mvaddch(display_y, display_x, ch);
                 attroff(COLOR_PAIR(COLOR_ALIEN));
             } else if (ch == LASER_HORIZONTAL || ch == LASER_VERTICAL) {
+                // Draw laser
                 attron(COLOR_PAIR(COLOR_LASER) | A_BOLD);
                 mvaddch(display_y, display_x, ch);
                 attroff(COLOR_PAIR(COLOR_LASER) | A_BOLD);
             } else if (ch >= 'A' && ch <= 'H') {
+                // Draw astronaut
                 attron(COLOR_PAIR(COLOR_ASTRONAUT));
                 mvaddch(display_y, display_x, ch);
                 attroff(COLOR_PAIR(COLOR_ASTRONAUT));
             } else {
+                // Draw empty cell
                 mvaddch(display_y, display_x, ' ');
             }
         }
@@ -269,31 +292,6 @@ void draw_grid(void) {
 
     // Refresh the screen
     refresh();
-
-    //Handle laser timing
-    int has_lasers = 0;
-    for (int y = 0; y < GRID_HEIGHT && !has_lasers; y++) {
-        for (int x = 0; x < GRID_WIDTH && !has_lasers; x++) {
-            if (grid[y][x] == LASER_HORIZONTAL || grid[y][x] == LASER_VERTICAL) {
-                has_lasers = 1;
-            }
-        }
-    }
-
-    if (has_lasers) {
-        usleep(LASER_DISPLAY_TIME);
-        
-        // Clear lasers
-        for (int y = 0; y < GRID_HEIGHT; y++) {
-            for (int x = 0; x < GRID_WIDTH; x++) {
-                if (grid[y][x] == LASER_HORIZONTAL || grid[y][x] == LASER_VERTICAL) {
-                    grid[y][x] = ' ';
-                    mvaddch(y + 3, x + 4, ' ');
-                }
-            }
-        }
-        refresh();
-    }
 }
 
 void cleanup(void) {
@@ -326,8 +324,9 @@ int main() {
         if (recv_size != -1) {
             buffer[recv_size] = '\0';
             update_grid(buffer);
-            draw_grid();
         }
+
+        draw_grid();
 
         // Check for user input to exit
         int ch = getch();
@@ -335,7 +334,7 @@ int main() {
             break;
         }
 
-        //usleep(50000); // 50ms delay
+        usleep(50000); // 50ms delay
     }
 
     // Clean up
