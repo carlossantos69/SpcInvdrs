@@ -27,6 +27,8 @@
 
 #define DEBUG_LINE (GRID_HEIGHT + 5)  // Line to show debug messages
 
+int game_over = 0;
+
 
 // ZeroMQ socket
 void* context;
@@ -117,13 +119,31 @@ void update_grid(char* update_message) {
         players[i].active = 0;
     }
 
-    //move(DEBUG_LINE, 0);
-    //clrtoeol();
-
      // Parse the message line by line
     char* line = strtok(update_message, "\n");
     while (line != NULL) {
-        if (strncmp(line, "PLAYER", 6) == 0) {
+        if (strncmp(line, "GAME_OVER", 9) == 0) {
+            game_over = 1; // Set a flag to indicate the game is over
+
+            // Parse final scores
+            line = strtok(NULL, "\n");
+            while (line != NULL) {
+                if (strncmp(line, "FINAL_SCORE", 11) == 0) {
+                    char id;
+                    int player_score;
+                    sscanf(line, "FINAL_SCORE %c %d", &id, &player_score);
+
+                    int idx = id - 'A';
+                    if (idx >= 0 && idx < MAX_PLAYERS) {
+                        players[idx].player_id = id;
+                        players[idx].score = player_score;
+                        players[idx].active = 1;
+                    }
+                }
+                line = strtok(NULL, "\n");
+            }
+            break; // Exit the outer parsing loop as we've reached the end
+        } else if (strncmp(line, "PLAYER", 6) == 0) {
             char id;
             int x, y;
             sscanf(line, "PLAYER %c %d %d", &id, &x, &y);
@@ -294,6 +314,66 @@ void draw_grid(void) {
     refresh();
 }
 
+void show_victory_screen() {
+    // Clear the screen
+    clear();
+
+    // Get the dimensions of the terminal window
+    int term_height, term_width;
+    getmaxyx(stdscr, term_height, term_width);
+
+    // Calculate center positions
+    int center_y = term_height / 2;
+    int center_x = term_width / 2;
+
+    // Find the player with the highest score
+    int max_score = -1;
+    char winner_id = '\0';
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].active && players[i].score > max_score) {
+            max_score = players[i].score;
+            winner_id = players[i].player_id;
+        }
+    }
+
+    // Display victory message
+    char title[] = "GAME OVER";
+    attron(A_BOLD);
+    mvprintw(center_y - 4, center_x - (int)(strlen(title) / 2), "%s", title);
+    attroff(A_BOLD);
+
+    // Display winner information
+    char winner_msg[100];
+    if (winner_id != '\0') {
+        snprintf(winner_msg, sizeof(winner_msg), "Winner: Astronaut %c with %d points!", winner_id, max_score);
+    } else {
+        snprintf(winner_msg, sizeof(winner_msg), "No winner!");
+    }
+    mvprintw(center_y - 2, center_x - (int)(strlen(winner_msg) / 2), "%s", winner_msg);
+
+    // Display scores of all players
+    mvprintw(center_y, center_x - 7, "Final Scores:");
+    int line = center_y + 1;
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].active) {
+            char score_msg[50];
+            snprintf(score_msg, sizeof(score_msg), "Astronaut %c: %d", players[i].player_id, players[i].score);
+            mvprintw(line++, center_x - (int)(strlen(score_msg) / 2), "%s", score_msg);
+        }
+    }
+
+    // Prompt to exit
+    char exit_msg[] = "Press any key to exit...";
+    mvprintw(line + 2, center_x - (int)(strlen(exit_msg) / 2), "%s", exit_msg);
+
+    // Refresh to display changes
+    refresh();
+
+    // Wait for user input to exit
+    nodelay(stdscr, FALSE);  // Make getch() blocking
+    getch();
+}
+
 void cleanup(void) {
     endwin();
     zmq_close(subscriber);
@@ -304,13 +384,13 @@ int main() {
     // Initialize ZeroMQ
     context = zmq_ctx_new();
     subscriber = zmq_socket(context, ZMQ_SUB);
-    
+
     // Connect to server's PUB socket
     if (zmq_connect(subscriber, CLIENT_CONNECT_SUB) != 0) {
         perror("Failed to connect to game server");
         return 1;
     }
-    
+
     // Subscribe to all messages
     zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, "", 0);
 
@@ -318,12 +398,23 @@ int main() {
     initialize_display();
 
     // Main loop
-    while (1) {
+    while (!game_over) {
         char buffer[BUFFER_SIZE];
         int recv_size = zmq_recv(subscriber, buffer, sizeof(buffer) - 1, ZMQ_DONTWAIT);
         if (recv_size != -1) {
             buffer[recv_size] = '\0';
             update_grid(buffer);
+        } else {
+            int err = zmq_errno();
+            if (err == EAGAIN) {
+                // No message received, continue
+            } else if (err == ETERM || err == ENOTSOCK) {
+                // The context was terminated or socket invalid, exit loop
+                break;
+            } else {
+                // Other errors, handle or log as needed
+                break;
+            }
         }
 
         draw_grid();
@@ -335,6 +426,17 @@ int main() {
         }
 
         usleep(50000); // 50ms delay
+    }
+
+    // Show victory screen if game_over flag is set
+    if (game_over) {
+        show_victory_screen();
+    } else {
+        // If game_over is not set, inform the user
+        clear();
+        mvprintw(GRID_HEIGHT / 2, (GRID_WIDTH / 2) - 12, "Connection lost. Press any key to exit...");
+        refresh();
+        getch();
     }
 
     // Clean up

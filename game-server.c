@@ -20,6 +20,8 @@ time_t last_alien_move = 0;
 #define MAX_PLAYERS 8
 #define MAX_LASERS 8
 
+int game_over = 0;
+
 typedef struct {
     char player_id;
     int x;
@@ -85,6 +87,15 @@ char assign_player_id() {
         }
     }
     return '\0'; // No available slots
+}
+
+int all_aliens_destroyed() {
+    for (int i = 0; i < MAX_ALIENS; i++) {
+        if (aliens[i].active) {
+            return 0; // There is at least one alien still active
+        }
+    }
+    return 1; // All aliens are inactive
 }
 
 void send_game_state() {
@@ -484,23 +495,46 @@ void update_alien_positions() {
     }
 }
 
-// Add near other function declarations
-void update_game_state() {    
-    // Update alien positions (existing functionality)
+void update_game_state() {
+    time_t current_time = time(NULL);
+    
+    // Update alien positions
     update_alien_positions();
     
     // Check laser collisions and update scores
     check_laser_collisions();
     
     // Deactivate lasers after 0.5 seconds
-    time_t current_time = time(NULL);
-
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (lasers[i].active && (current_time - lasers[i].creation_time >= 1)) {
+    for (int i = 0; i < MAX_LASERS; i++) {
+        if (lasers[i].active && difftime(current_time, lasers[i].creation_time) >= 0.5) {
             lasers[i].active = 0;
-            //printf("Player %c last fire time: %ld\n", players[i].player_id, players[i].last_fire_time);
         }
     }
+
+    // Check if all aliens are destroyed
+    if (all_aliens_destroyed()) {
+        game_over = 1; // Set a game over flag
+    }
+}
+
+void send_game_over_state() {
+    char message[BUFFER_SIZE] = "GAME_OVER\n";
+    char temp[100];
+
+    // Include final scores of all players
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].player_id != '\0') {
+            snprintf(temp, sizeof(temp), "FINAL_SCORE %c %d\n",
+                     players[i].player_id, players[i].score);
+            strcat(message, temp);
+        }
+    }
+
+    // Send the message
+    zmq_send(publisher, message, strlen(message), 0);
+
+    // Give the display client time to process the message before terminating
+    sleep(1);
 }
 
 int main() {
@@ -517,7 +551,7 @@ int main() {
     publisher = zmq_socket(context, ZMQ_PUB);
     zmq_bind(publisher, SERVER_ENDPOINT_PUB);
     
-    while (1) {
+    while (!game_over) {
         char buffer[BUFFER_SIZE];
         // Handle astronaut messages (REQ/REP)
         int recv_size = zmq_recv(responder, buffer, BUFFER_SIZE - 1, ZMQ_DONTWAIT);
@@ -536,9 +570,12 @@ int main() {
         
         usleep(50000); // 50ms delay
     }
+
+    send_game_over_state();
     
     zmq_close(responder);
     zmq_close(publisher);
-    zmq_ctx_destroy(context);
+    zmq_ctx_destroy(context);   // Shutdown context
+    zmq_ctx_term(context);     // Terminate context
     return 0;
 }
