@@ -47,6 +47,14 @@ typedef struct {
     int active;
 } Alien;
 
+typedef struct {
+    char ch;            // Character to display at this cell
+    time_t laser_time;  // Timestamp when the laser was drawn
+} Cell;
+
+// Game state representation
+Cell grid[GRID_HEIGHT][GRID_WIDTH];
+
 Player players[MAX_PLAYERS];
 Laser lasers[MAX_PLAYERS]; // One laser per player
 Alien aliens[MAX_ALIENS];
@@ -72,6 +80,173 @@ void initialize_game_state() {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         lasers[i].active = 0;
     }
+
+    // Initialize grid to empty spaces
+    for (int y = 0; y < GRID_HEIGHT; y++) {
+        for (int x = 0; x < GRID_WIDTH; x++) {
+            grid[y][x].ch = ' ';
+            grid[y][x].laser_time = 0;
+        }
+    }
+}
+
+void clear_grid() {
+    for (int y = 0; y < GRID_HEIGHT; y++) {
+        for (int x = 0; x < GRID_WIDTH; x++) {
+            grid[y][x].ch = ' ';
+        }
+    }
+}
+
+void update_grid() {
+    clear_grid();
+
+    // Place players on the grid
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].player_id != '\0') {
+            int x = players[i].x;
+            int y = players[i].y;
+            if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
+                grid[y][x].ch = players[i].player_id;
+            }
+        }
+    }
+
+    // Place aliens on the grid
+    for (int i = 0; i < MAX_ALIENS; i++) {
+        if (aliens[i].active) {
+            int x = aliens[i].x;
+            int y = aliens[i].y;
+            if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
+                grid[y][x].ch = '*'; // Represent aliens with '*'
+            }
+        }
+    }
+
+    // Place lasers on the grid
+    time_t now = time(NULL);
+    for (int i = 0; i < MAX_LASERS; i++) {
+        if (lasers[i].active) {
+            Laser* laser = &lasers[i];
+            if (strcmp(laser->direction, "HORIZONTAL") == 0) {
+                int y = laser->y;
+                if (laser->player_id == 'A' || laser->player_id == 'H') {
+                    for (int x = laser->x; x < GRID_WIDTH; x++) {
+                        grid[y][x].ch = '-';
+                        grid[y][x].laser_time = now;
+                    }
+                } else if (laser->player_id == 'D' || laser->player_id == 'F') {
+                    for (int x = laser->x; x >= 0; x--) {
+                        grid[y][x].ch = '-';
+                        grid[y][x].laser_time = now;
+                    }
+                }
+            } else if (strcmp(laser->direction, "VERTICAL") == 0) {
+                int x = laser->x;
+                if (laser->player_id == 'E' || laser->player_id == 'G') {
+                    for (int y = laser->y; y < GRID_HEIGHT; y++) {
+                        grid[y][x].ch = '|';
+                        grid[y][x].laser_time = now;
+                    }
+                } else if (laser->player_id == 'B' || laser->player_id == 'C') {
+                    for (int y = laser->y; y >= 0; y--) {
+                        grid[y][x].ch = '|';
+                        grid[y][x].laser_time = now;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void draw_scores() {
+    // Clear the score area first
+    for (int y = 3; y < GRID_HEIGHT + 3; y++) {
+        for (int x = SCORE_START_X; x < SCORE_START_X + 20; x++) {
+            mvaddch(y, x, ' ');
+        }
+    }
+
+    // Draw scores header
+    attron(A_BOLD);
+    mvprintw(3, SCORE_START_X, "SCORES:");
+    attroff(A_BOLD);
+
+    int line = 5;
+
+    // Display scores for all active players
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].player_id != '\0') {
+            attron(COLOR_PAIR(COLOR_ASTRONAUT));
+            mvprintw(line++, SCORE_START_X, "Astronaut %c: %d", 
+                     players[i].player_id, players[i].score);
+            attroff(COLOR_PAIR(COLOR_ASTRONAUT));
+        }
+    }
+}
+
+void draw_grid() {
+    // Draw the grid with borders and coordinates
+
+    // Draw row numbers on the left
+    for (int i = 0; i < GRID_HEIGHT; i++) {
+        mvprintw(i + 3, 1, "%d", (i + 1) % 10);
+    }
+
+    // Draw column numbers on the top
+    for (int i = 0; i < GRID_WIDTH; i++) {
+        mvprintw(1, i + 4, "%d", (i + 1) % 10);
+    }
+
+    // Draw border around the grid
+    for (int y = 0; y <= GRID_HEIGHT; y++) {
+        mvaddch(y + 2, 3, '|');
+        mvaddch(y + 2, GRID_WIDTH + 4, '|');
+    }
+    for (int x = 3; x <= GRID_WIDTH + 4; x++) {
+        mvaddch(2, x, '-');
+        mvaddch(GRID_HEIGHT + 3, x, '-');
+    }
+
+    // Draw the grid contents
+    time_t now = time(NULL);
+    for (int y = 0; y < GRID_HEIGHT; y++) {
+        for (int x = 0; x < GRID_WIDTH; x++) {
+            char ch = grid[y][x].ch;
+            int display_y = y + 3;
+            int display_x = x + 4;
+
+            if (ch == '*') {
+                // Draw alien
+                attron(COLOR_PAIR(COLOR_ALIEN));
+                mvaddch(display_y, display_x, ch);
+                attroff(COLOR_PAIR(COLOR_ALIEN));
+            } else if (ch == '-' || ch == '|') {
+                // Draw laser
+                attron(COLOR_PAIR(COLOR_LASER) | A_BOLD);
+                mvaddch(display_y, display_x, ch);
+                attroff(COLOR_PAIR(COLOR_LASER) | A_BOLD);
+                // Remove laser after a short time
+                if (difftime(now, grid[y][x].laser_time) > 0.5) {
+                    grid[y][x].ch = ' ';
+                }
+            } else if (ch >= 'A' && ch <= 'H') {
+                // Draw astronaut
+                attron(COLOR_PAIR(COLOR_ASTRONAUT));
+                mvaddch(display_y, display_x, ch);
+                attroff(COLOR_PAIR(COLOR_ASTRONAUT));
+            } else {
+                // Draw empty cell
+                mvaddch(display_y, display_x, ' ');
+            }
+        }
+    }
+
+    // Draw scores
+    draw_scores();
+
+    // Refresh the screen
+    refresh();
 }
 
 void generate_session_token(char* token, size_t length) {
@@ -249,12 +424,12 @@ void initialize_player_position(Player* player, char id) {
             player->y = GRID_HEIGHT - 2;
             break;
     }
-    printf("Initialized player %c at position (%d, %d)\n", id, player->x, player->y);
+    //printf("Initialized player %c at position (%d, %d)\n", id, player->x, player->y);
 }
 
 
 void process_client_message(char* message, char* response) {
-    printf("Received message: %s\n", message);
+    //printf("Received message: %s\n", message);
 
     if (strncmp(message, "CONNECT", 7) == 0) {
         char new_id = assign_player_id();
@@ -270,8 +445,7 @@ void process_client_message(char* message, char* response) {
                     initialize_player_position(&players[i], new_id);
                     sprintf(response, "%c %s", new_id, players[i].session_token);
 
-                    printf("New player %c initialized at (%d,%d) with session token %s\n",
-                           new_id, players[i].x, players[i].y, players[i].session_token);
+                    //printf("New player %c initialized at (%d,%d) with session token %s\n",new_id, players[i].x, players[i].y, players[i].session_token);
 
                     send_game_state();
                     return;
@@ -383,7 +557,7 @@ void process_client_message(char* message, char* response) {
             if (player->player_id == 'A' || player->player_id == 'H') {
                 lasers[laser_index].x = player->x + 1; // Start right of player
                 lasers[laser_index].y = player->y;
-                printf("Player %c fired a laser from %d, %d\n", player_id, lasers[laser_index].x, lasers[laser_index].y);
+                //printf("Player %c fired a laser from %d, %d\n", player_id, lasers[laser_index].x, lasers[laser_index].y);
             } else {
                 lasers[laser_index].x = player->x - 1;  // Start left of player
                 lasers[laser_index].y = player->y;
@@ -404,7 +578,7 @@ void process_client_message(char* message, char* response) {
         lasers[laser_index].player_id = player_id;
         lasers[laser_index].creation_time = current_time;
 
-        printf("Player %c fired a laser %s.\n", player_id, lasers[laser_index].direction);
+        //printf("Player %c fired a laser %s.\n", player_id, lasers[laser_index].direction);
         snprintf(response, BUFFER_SIZE, "OK %d", player->score);
     } else if (strcmp(cmd, "DISCONNECT") == 0) {
         player->player_id = '\0';
@@ -413,7 +587,7 @@ void process_client_message(char* message, char* response) {
         player->x = 0;
         player->y = 0;
         lasers[player_id - 'A'].active = 0;
-        printf("Player %c disconnected.\n", player_id);
+        //printf("Player %c disconnected.\n", player_id);
         strcpy(response, "OK");
     } else {
         strcpy(response, "ERROR Unknown command");
@@ -577,8 +751,84 @@ void send_game_over_state() {
     sleep(1);
 }
 
+void show_victory_screen() {
+    // Clear the screen
+    clear();
+
+    // Get the dimensions of the terminal window
+    int term_height, term_width;
+    getmaxyx(stdscr, term_height, term_width);
+
+    // Calculate center positions
+    int center_y = term_height / 2;
+    int center_x = term_width / 2;
+
+    // Find the player with the highest score
+    int max_score = -1;
+    char winner_id = '\0';
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].player_id != '\0' && players[i].score > max_score) {
+            max_score = players[i].score;
+            winner_id = players[i].player_id;
+        }
+    }
+
+    // Display victory message
+    attron(A_BOLD);
+    mvprintw(center_y - 4, center_x - 5, "GAME OVER");
+    attroff(A_BOLD);
+
+    // Display winner information
+    if (winner_id != '\0') {
+        mvprintw(center_y - 2, center_x - 15, "Winner: Astronaut %c with %d points!", winner_id, max_score);
+    } else {
+        mvprintw(center_y - 2, center_x - 5, "No winner!");
+    }
+
+    // Display scores of all players
+    mvprintw(center_y, center_x - 7, "Final Scores:");
+    int line = center_y + 1;
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].player_id != '\0') {
+            mvprintw(line++, center_x - 10, "Astronaut %c: %d", players[i].player_id, players[i].score);
+        }
+    }
+
+    // Prompt to exit
+    mvprintw(line + 2, center_x - 10, "Press any key to exit...");
+
+    // Refresh to display changes
+    refresh();
+
+    // Wait for user input to exit
+    nodelay(stdscr, FALSE);  // Make getch() blocking
+    getch();
+}
+
+void cleanup() {
+    endwin(); // Restore normal terminal behavior
+    // Close ZeroMQ sockets if necessary
+    zmq_close(responder);
+    zmq_close(publisher);
+    zmq_ctx_destroy(context);
+}
+
 int main() {
     initialize_game_state();
+
+    // Initialize ncurses
+    initscr();
+    noecho();
+    curs_set(FALSE); // Hide the cursor
+    cbreak();
+    keypad(stdscr, TRUE);
+    nodelay(stdscr, TRUE); // Non-blocking input
+    start_color();
+
+    // Initialize color pairs (define these constants as needed)
+    init_pair(COLOR_ASTRONAUT, COLOR_GREEN, COLOR_BLACK);   // Astronauts
+    init_pair(COLOR_ALIEN, COLOR_RED, COLOR_BLACK);         // Aliens
+    init_pair(COLOR_LASER, COLOR_YELLOW, COLOR_BLACK);      // Lasers
     
     // Initialize ZeroMQ context
     context = zmq_ctx_new();
@@ -610,6 +860,13 @@ int main() {
         
         // Update game state
         update_game_state();
+
+        // Update the grid based on the current game state
+        update_grid();
+
+        // Draw the updated grid
+        draw_grid();
+
         
         // Send updated state to display
         send_game_state();
@@ -618,10 +875,13 @@ int main() {
     }
 
     send_game_over_state();
+    // Show game over screen
+    show_victory_screen();
     
     zmq_close(responder);
     zmq_close(publisher);
     zmq_ctx_destroy(context);   // Shutdown context
     zmq_ctx_term(context);     // Terminate context
+    cleanup();
     return 0;
 }

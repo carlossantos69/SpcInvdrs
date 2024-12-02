@@ -11,16 +11,6 @@
 #define GRID_HEIGHT 20
 #define MAX_PLAYERS 8
 
-// Color pair definitions
-#define COLOR_ASTRONAUT 1
-#define COLOR_ALIEN 2
-#define COLOR_LASER 3
-
-#define SCORE_START_Y 5
-#define SCORE_START_X (GRID_WIDTH + 6)
-#define SCORE_PADDING 4  // Space between grid and scores
-
-
 #define LASER_HORIZONTAL '-'
 #define LASER_VERTICAL '|'
 #define LASER_DISPLAY_TIME 500000 // 0.5 seconds in microseconds

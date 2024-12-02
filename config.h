@@ -15,12 +15,21 @@
 #define MAX_ALIENS 33  // 1/3 of grid area
 #define BUFFER_SIZE 2048
 
+#define SCORE_START_Y 5
+#define SCORE_START_X (GRID_WIDTH + 6)
+#define SCORE_PADDING 4  // Space between grid and scores
+
 // Message Types
 #define MSG_CONNECT 1
 #define MSG_MOVEMENT 2
 #define MSG_ZAP 3
 #define MSG_DISCONNECT 4
 #define MSG_UPDATE 5
+
+// Color pair definitions
+#define COLOR_ASTRONAUT 1
+#define COLOR_ALIEN 2
+#define COLOR_LASER 3
 
 // Movement Directions
 #define MOVE_LEFT 'L'
