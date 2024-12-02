@@ -5,6 +5,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <zmq.h>
+#include <ctype.h>
 #include "config.h"
 
 void* context;
@@ -28,6 +29,7 @@ typedef struct {
     int y;
     int score;
     time_t last_fire_time;
+    char session_token[33]; // 32-char hex token + null terminator
 } Player;
 
 typedef struct {
@@ -51,6 +53,8 @@ Alien aliens[MAX_ALIENS];
 
 void initialize_game_state() {
     // Initialize players
+    srand(time(NULL));
+
     for (int i = 0; i < MAX_PLAYERS; i++) {
         players[i].player_id = '\0';
         players[i].score = 0;
@@ -68,6 +72,15 @@ void initialize_game_state() {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         lasers[i].active = 0;
     }
+}
+
+void generate_session_token(char* token, size_t length) {
+    const char charset[] = "abcdef0123456789";
+    for (size_t i = 0; i < length - 1; i++) {
+        size_t index = rand() % (sizeof(charset) - 1);
+        token[i] = charset[index];
+    }
+    token[length - 1] = '\0';
 }
 
 char assign_player_id() {
@@ -242,145 +255,172 @@ void initialize_player_position(Player* player, char id) {
 
 void process_client_message(char* message, char* response) {
     printf("Received message: %s\n", message);
+
     if (strncmp(message, "CONNECT", 7) == 0) {
         char new_id = assign_player_id();
         if (new_id != '\0') {
-        // Find empty slot and initialize player
-        for (int i = 0; i < MAX_PLAYERS; i++) {
-            if (players[i].player_id == '\0') {
-                players[i].player_id = new_id;
-                players[i].score = 0;
-                players[i].last_fire_time = 0;
-                
-                // Initialize player position
-                initialize_player_position(&players[i], new_id);
-                
-                // Send back player ID
-                sprintf(response, "%c", new_id);
-                
-                printf("New player %c initialized at (%d,%d)\n", 
-                       new_id, players[i].x, players[i].y);
-                
-                // Send updated game state to display
-                send_game_state();
-                break;
-            }
-        }
-    } else {
-            // Changed from "ERROR No available slots" to be more informative
-            strcpy(response, "FULL Maximum number of players (8) reached");
-    }
-    }
-    else if (strncmp(message, "MOVE", 4) == 0) {
-        char player_id = message[5];
-        char direction[10];
-        sscanf(message + 7, "%s", direction);
-        
-        Player* player = NULL;
-        for (int i = 0; i < MAX_PLAYERS; i++) {
-            if (players[i].player_id == player_id) {
-                player = &players[i];
-                break;
-            }
-        }
-        
-        if (player) {
-            
-            // Check if move is valid for player's id
-            if (is_valid_move(player, direction)) {
-                // Update position
-                if (strcmp(direction, "LEFT") == 0) player->x--;
-                else if (strcmp(direction, "RIGHT") == 0) player->x++;
-                else if (strcmp(direction, "UP") == 0) player->y--;
-                else if (strcmp(direction, "DOWN") == 0) player->y++;
-                
-                snprintf(response, BUFFER_SIZE, "OK %d", player->score);
+            for (int i = 0; i < MAX_PLAYERS; i++) {
+                if (players[i].player_id == '\0') {
+                    players[i].player_id = new_id;
+                    players[i].score = 0;
+                    players[i].last_fire_time = 0;
 
+                    generate_session_token(players[i].session_token, 33);
+
+                    initialize_player_position(&players[i], new_id);
+                    sprintf(response, "%c %s", new_id, players[i].session_token);
+
+                    printf("New player %c initialized at (%d,%d) with session token %s\n",
+                           new_id, players[i].x, players[i].y, players[i].session_token);
+
+                    send_game_state();
+                    return;
+                }
+            }
+        }
+        strcpy(response, "FULL Maximum number of players (8) reached");
+        return;
+    }
+
+    // Validate session token and player ID
+    char cmd[16] = {0};
+    char player_id;
+    char session_token[33];
+    int num_parsed = sscanf(message, "%15s %c %32s", cmd, &player_id, session_token);
+
+    if (num_parsed < 3) {
+        strcpy(response, "ERROR Missing session token");
+        return;
+    }
+
+    // Validate the command string (allowed commands: CONNECT, MOVE, ZAP, DISCONNECT)
+    if (strcmp(cmd, "CONNECT") != 0 && strcmp(cmd, "MOVE") != 0 &&
+        strcmp(cmd, "ZAP") != 0 && strcmp(cmd, "DISCONNECT") != 0) {
+        strncpy(response, "ERROR Unknown command", BUFFER_SIZE - 1);
+        response[BUFFER_SIZE - 1] = '\0';
+        return;
+    }
+
+    // Validate player_id (should be between 'A' and 'H')
+    if (player_id < 'A' || player_id > 'H') {
+        strncpy(response, "ERROR Invalid player ID", BUFFER_SIZE - 1);
+        response[BUFFER_SIZE - 1] = '\0';
+        return;
+    }
+
+    // Validate session token characters (should be hexadecimal)
+    for (int i = 0; i < 32; i++) {
+        if (!isxdigit(session_token[i])) {
+            strncpy(response, "ERROR Invalid session token characters", BUFFER_SIZE - 1);
+            response[BUFFER_SIZE - 1] = '\0';
+            return;
+        }
+    }
+
+    // Validate session_token length (should be exactly 32 characters)
+    if (strlen(session_token) != 32) {
+        strncpy(response, "ERROR Invalid session token length", BUFFER_SIZE - 1);
+        response[BUFFER_SIZE - 1] = '\0';
+        return;
+    }
+
+    Player* player = NULL;
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].player_id == player_id &&
+            strcmp(players[i].session_token, session_token) == 0) {
+            player = &players[i];
+            break;
+        }
+    }
+
+    if (!player) {
+        strncpy(response, "ERROR Invalid player ID or session token", BUFFER_SIZE - 1);
+        response[BUFFER_SIZE - 1] = '\0';
+        return;
+    }
+
+    // Command handling with checks
+    if (strcmp(cmd, "MOVE") == 0) {
+        char direction[10];
+        if (sscanf(message, "%*s %*c %*s %9s", direction) != 1) {
+            strcpy(response, "ERROR Invalid MOVE command format");
+            return;
+        }
+
+        // Validate direction
+        if (strcmp(direction, "LEFT") != 0 && strcmp(direction, "RIGHT") != 0 &&
+            strcmp(direction, "UP") != 0 && strcmp(direction, "DOWN") != 0) {
+            strncpy(response, "ERROR Invalid direction", BUFFER_SIZE - 1);
+            response[BUFFER_SIZE - 1] = '\0';
+            return;
+        }
+
+        if (is_valid_move(player, direction)) {
+            if (strcmp(direction, "LEFT") == 0) player->x--;
+            else if (strcmp(direction, "RIGHT") == 0) player->x++;
+            else if (strcmp(direction, "UP") == 0) player->y--;
+            else if (strcmp(direction, "DOWN") == 0) player->y++;
+            snprintf(response, BUFFER_SIZE, "OK %d", player->score);
+        } else {
+            strcpy(response, "ERROR Invalid move");
+        }
+    } else if (strcmp(cmd, "ZAP") == 0) {
+        time_t current_time = time(NULL);
+        if (difftime(current_time, player->last_fire_time) < 3) {
+            strcpy(response, "ERROR Laser cooldown");
+            return;
+        }
+        player->last_fire_time = current_time;
+        int laser_index = player_id - 'A';
+        if (lasers[laser_index].active) {
+            strcpy(response, "ERROR Laser already active");
+            return;
+        }
+
+        // Determine laser direction based on player's id
+        if (player->player_id == 'A' || player->player_id == 'H' || player->player_id == 'D' || player->player_id == 'F') {
+            strcpy(lasers[laser_index].direction, "HORIZONTAL");
+            if (player->player_id == 'A' || player->player_id == 'H') {
+                lasers[laser_index].x = player->x + 1; // Start right of player
+                lasers[laser_index].y = player->y;
+                printf("Player %c fired a laser from %d, %d\n", player_id, lasers[laser_index].x, lasers[laser_index].y);
             } else {
-                snprintf(response, BUFFER_SIZE, "ERROR Invalid move %d", player->score);
+                lasers[laser_index].x = player->x - 1;  // Start left of player
+                lasers[laser_index].y = player->y;
             }
         } else {
-            strcpy(response, "ERROR Player not found");
-        }
-    } else if (strncmp(message, "ZAP", 3) ==0) {
-        char player_id = message[4];
-
-        // Find the player
-        Player* player = NULL;
-        for (int i =0; i < MAX_PLAYERS; i++) {
-            if (players[i].player_id == player_id) {
-                player = &players[i];
-                break;
-            }
-        }
-
-        if (player) {
-            time_t current_time = time(NULL);
-            if (current_time - player->last_fire_time < LASER_COOLDOWN) {
-                strcpy(response, "ERROR Laser cooldown");
-                return;
-            }
-            player->last_fire_time = current_time;
-
-            // Check if player already has an active laser
-            int laser_index = player_id - 'A';
-            if (lasers[laser_index].active) {
-                strcpy(response, "ERROR Laser already active");
-                return;
-            }
-
-            // Determine laser direction based on player's id
-            if (player->player_id == 'A' || player->player_id == 'H' || player->player_id == 'D' || player->player_id == 'F') {
-                strcpy(lasers[laser_index].direction, "HORIZONTAL");
-                if (player->player_id == 'A' || player->player_id == 'H') {
-                    lasers[laser_index].x = player->x + 1; // Start right of player
-                    lasers[laser_index].y = player->y;
-                    printf("Player %c fired a laser from %d, %d\n", player_id, lasers[laser_index].x, lasers[laser_index].y);
-                } else {
-                    lasers[laser_index].x = player->x - 1;  // Start left of player
-                    lasers[laser_index].y = player->y;
-                }
+            strcpy(lasers[laser_index].direction, "VERTICAL");
+            if (player->player_id == 'B' || player->player_id == 'C') {
+                lasers[laser_index].y = player->y - 1;
+                lasers[laser_index].x = player->x;
             } else {
-                strcpy(lasers[laser_index].direction, "VERTICAL");
-                if (player->player_id == 'B' || player->player_id == 'C') {
-                    lasers[laser_index].y = player->y - 1;
-                    lasers[laser_index].x = player->x;
-                } else {
-                    lasers[laser_index].y = player->y + 1;
-                    lasers[laser_index].x = player->x;
-                }
-            }
-
-            // Initialize laser position
-            lasers[laser_index].active = 1;
-            lasers[laser_index].player_id = player_id;
-            lasers[laser_index].creation_time = current_time;
-
-            printf("Player %c fired a laser %s.\n", player_id, lasers[laser_index].direction);
-            snprintf(response, BUFFER_SIZE, "OK %d", player->score);
-        }
-        else {
-            snprintf(response, BUFFER_SIZE, "ERROR %s %d", "erro", player->score);
-        }
-    }
-    else if (strncmp(message, "DISCONNECT", 10) ==0) {
-        char player_id = message[11];
-        // Find and remove the player
-        for (int i =0; i < MAX_PLAYERS; i++) {
-            if (players[i].player_id == player_id) {
-                players[i].player_id = '\0';
-                players[i].score =0;
-                lasers[i].active =0;
-                printf("Player %c disconnected.\n", player_id);
-                break;
+                lasers[laser_index].y = player->y + 1;
+                lasers[laser_index].x = player->x;
             }
         }
+
+        // Initialize laser position
+        lasers[laser_index].active = 1;
+        lasers[laser_index].player_id = player_id;
+        lasers[laser_index].creation_time = current_time;
+
+        printf("Player %c fired a laser %s.\n", player_id, lasers[laser_index].direction);
+        snprintf(response, BUFFER_SIZE, "OK %d", player->score);
+    } else if (strcmp(cmd, "DISCONNECT") == 0) {
+        player->player_id = '\0';
+        memset(player->session_token, 0, sizeof(player->session_token));
+        player->score = 0;
+        player->x = 0;
+        player->y = 0;
+        lasers[player_id - 'A'].active = 0;
+        printf("Player %c disconnected.\n", player_id);
         strcpy(response, "OK");
-    }
-    else {
+    } else {
         strcpy(response, "ERROR Unknown command");
     }
 }
+
+
 
 void check_laser_collisions() {
     for (int i = 0; i < MAX_PLAYERS; i++) {
@@ -552,13 +592,19 @@ int main() {
     zmq_bind(publisher, SERVER_ENDPOINT_PUB);
     
     while (!game_over) {
-        char buffer[BUFFER_SIZE];
-        // Handle astronaut messages (REQ/REP)
+        // Define safer buffer sizes
+        char buffer[BUFFER_SIZE] = {0};
+
+        // Receive messages with a maximum limit
         int recv_size = zmq_recv(responder, buffer, BUFFER_SIZE - 1, ZMQ_DONTWAIT);
-        if (recv_size != -1) {
+        if (recv_size > 0 && recv_size < BUFFER_SIZE) {
             buffer[recv_size] = '\0';
             char response[BUFFER_SIZE];
             process_client_message(buffer, response);
+            zmq_send(responder, response, strlen(response), 0);
+        } else if (recv_size >= BUFFER_SIZE) {
+            // Message too long, possible overflow attempt
+            char response[] = "ERROR Message too long";
             zmq_send(responder, response, strlen(response), 0);
         }
         

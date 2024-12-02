@@ -15,6 +15,7 @@ void* requester;
 // Player state
 char player_id = '\0';
 int score = 0;
+char session_token[33]; // To store the session token received from the server
 
 void send_connect_message() {
     char buffer[BUFFER_SIZE];
@@ -43,6 +44,18 @@ void send_connect_message() {
             zmq_close(requester);
             zmq_ctx_destroy(context);
             exit(0);
+        }else{
+            // Parse player ID and session token
+            if (sscanf(buffer, "%c %32s", &player_id, session_token) != 2) {
+                // Handle parsing error
+                strcpy(session_token, "");
+            }
+            // Initialize display with player ID and session token
+            move(0, 0);
+            clrtoeol();
+            mvprintw(0, 0, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", 
+                     player_id, score);
+            refresh();
         }
         
         // Normal connection success handling
@@ -68,37 +81,33 @@ void update_score(int new_score) {
 
 void handle_key_input() {
     int ch = getch();
-    char buffer[BUFFER_SIZE];
-    move(0, 0);
-    clrtoeol();
-    // Display current player info
-    mvprintw(0, 0, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", player_id ,score);
-    refresh();
+    if (ch == ERR) return; // No key pressed
 
-    switch(ch) {
-        case KEY_LEFT:
-            snprintf(buffer, sizeof(buffer), "MOVE %c LEFT", player_id);
-            zmq_send(requester, buffer, strlen(buffer), 0);
-            break;
-        case KEY_RIGHT:
-            snprintf(buffer, sizeof(buffer), "MOVE %c RIGHT", player_id);
-            zmq_send(requester, buffer, strlen(buffer), 0);
-            break;
+    char buffer[BUFFER_SIZE];
+    switch (ch) {
         case KEY_UP:
-            snprintf(buffer, sizeof(buffer), "MOVE %c UP", player_id);
+            snprintf(buffer, sizeof(buffer), "MOVE %c %s UP", player_id, session_token);
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case KEY_DOWN:
-            snprintf(buffer, sizeof(buffer), "MOVE %c DOWN", player_id);
+            snprintf(buffer, sizeof(buffer), "MOVE %c %s DOWN", player_id, session_token);
+            zmq_send(requester, buffer, strlen(buffer), 0);
+            break;
+        case KEY_LEFT:
+            snprintf(buffer, sizeof(buffer), "MOVE %c %s LEFT", player_id, session_token);
+            zmq_send(requester, buffer, strlen(buffer), 0);
+            break;
+        case KEY_RIGHT:
+            snprintf(buffer, sizeof(buffer), "MOVE %c %s RIGHT", player_id, session_token);
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case ' ':
-            snprintf(buffer, sizeof(buffer), "ZAP %c", player_id);
+            snprintf(buffer, sizeof(buffer), "ZAP %c %s", player_id, session_token);
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case 'q':
         case 'Q':
-            snprintf(buffer, sizeof(buffer), "DISCONNECT %c", player_id);
+            snprintf(buffer, sizeof(buffer), "DISCONNECT %c %s", player_id, session_token);
             zmq_send(requester, buffer, strlen(buffer), 0);
             // Clean up and exit
             endwin();
@@ -119,15 +128,20 @@ void handle_key_input() {
         // Parse response to get status and score
         char status[32];
         int new_score;
-        if (sscanf(buffer, "%s %d", status, &new_score) == 2) {
-            // Update score regardless of status
-            score = new_score;
-            
+        if (sscanf(buffer, "%31s %d", status, &new_score) >= 1) {
+            // Update score if provided
+            if (sscanf(buffer, "%*s %d", &new_score) == 1) {
+                score = new_score;
+            }
+
             // Update display
             move(0, 0);
             clrtoeol();
             mvprintw(0, 0, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", 
                      player_id, score);
+            if (strcmp(status, "ERROR") == 0) {
+                mvprintw(1, 0, "Last action failed: %s", buffer);
+            }
             refresh();
         }
     } else {
