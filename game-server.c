@@ -13,6 +13,7 @@ void* responder;  // For REQ/REP with astronauts
 void* publisher;  // For PUB/SUB with display
 time_t last_alien_move = 0;
 
+#define MAX_PLAYERS 8
 #define BORDER_OFFSET 2      // Distance from edge for playable area
 #define INNER_OFFSET 2       // Distance from player area to alien area
 #define ALIEN_AREA_START 2   // Where aliens can start moving
@@ -57,15 +58,15 @@ Player_t players[MAX_PLAYERS];
 Alien_t aliens[MAX_ALIENS];
 
 // Auxiliary functions to find players by ID or session token
-Player_t* find_by_id(Player_t players[], char player_id) {
+Player_t* find_by_id(const char id) {
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].player_id == player_id) {
+        if (players[i].player_id == id) {
             return &players[i];
-        }
+        } 
     }
     return NULL;
 }
-Player_t* find_by_session_token(Player_t players[], const char* session_token) {
+Player_t* find_by_session_token(const char* session_token) {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (strcmp(players[i].session_token, session_token) == 0) {
             return &players[i];
@@ -93,7 +94,7 @@ char assign_player_id() {
 
     // Collect all available IDs
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (find_by_id(players, ids[i]) == NULL) {
+        if (find_by_id(ids[i]) == NULL) {
             available_ids[count++] = ids[i];
         }
     }
@@ -108,19 +109,17 @@ char assign_player_id() {
     return available_ids[random_index];
 }
 
-/* OLD FUNCTION THAT IS SEQUENTIAL
-char assign_player_id() {
-    // Check IDs sequentially from A to H
-    for (char id = 'A'; id <= 'H'; id++) {
-        // Check if this ID is already taken
-        if (find_by_id(players, id) == NULL) {
-            return id;
-        }
-    }
+void clear_player(Player_t *player) {
+    if (player == NULL) return;
 
-    return NULL; // No available slots
+    player->player_id = '\0';
+    player->score = 0;
+    player->last_fire_time = 0;
+    player->last_stun_time = 0;
+    player->session_token[0] = '\0';
+    player->laser.active = 0; 
 }
-*/
+
 
 int all_aliens_destroyed() {
     for (int i = 0; i < MAX_ALIENS; i++) {
@@ -139,11 +138,7 @@ void initialize_game_state() {
     srand(time(NULL));
 
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        players[i].player_id = '\0';
-        players[i].score = 0;
-        strcpy(players[i].session_token, "\0");
-        players[i].laser.active = 0;
-
+        clear_player(&players[i]);
     }
 
     // Initialize aliens at random positions within the inner grid
@@ -469,19 +464,14 @@ void process_client_message(char* message, char* response) {
     if (strncmp(message, "CONNECT", 7) == 0) {
         char new_id = assign_player_id();
         if (new_id != '\0') {
+            // Find available player id and initialize a new player
             for (int i = 0; i < MAX_PLAYERS; i++) {
                 if (players[i].player_id == '\0') {
+                    clear_player(&players[i]); // Probably redundant
                     players[i].player_id = new_id;
-                    players[i].score = 0;
-                    players[i].last_fire_time = 0;
-                    players[i].last_stun_time = 0;
-                    players[i].laser.active = 0;
-
                     generate_session_token(players[i].session_token);
-
                     initialize_player_position(&players[i], new_id);
                     sprintf(response, "%c %s", new_id, players[i].session_token);
-
                     //printf("New player %c initialized at (%d,%d) with session token %s\n",new_id, players[i].x, players[i].y, players[i].session_token);
 
                     send_game_state();
@@ -536,7 +526,7 @@ void process_client_message(char* message, char* response) {
     }
 
     // Find the player based on the provided player ID and session token
-    Player_t* player = find_by_id(players, player_id);
+    Player_t* player = find_by_id(player_id);
     if (!player) {
         strncpy(response, "ERROR Invalid player ID or session token", BUFFER_SIZE - 1);
         response[BUFFER_SIZE - 1] = '\0';
@@ -637,14 +627,8 @@ void process_client_message(char* message, char* response) {
         //printf("Player %c fired a laser %s.\n", player_id, player->laser.direction);
         snprintf(response, BUFFER_SIZE, "OK %d", player->score);
     } else if (strcmp(cmd, "DISCONNECT") == 0) {
-        // TODO: PASS THIS TO A FUNCTION REMOVE_OR_INIT_PLAYER() THAT CLEARS THE PLAYER
-        player->player_id = '\0';
-        player->session_token[0] = '\0';
-        player->score = 0;
-        player->x = 0;
-        player->y = 0;
-        player->laser.active = 0;
-        //printf("Player %c disconnected.\n", player_id);
+        clear_player(player);
+        //printf("Player %c disconnected.\n", player->player_id);
         strcpy(response, "OK");
     } else {
         strcpy(response, "ERROR Unknown command");
@@ -664,7 +648,7 @@ void check_laser_collisions() {
                     if (aliens[j].active && aliens[j].y == laser->y) {
                         // Kill allien and update player score
                         aliens[j].active = 0;
-                        players[i].score++;
+                        players[i].score += KILL_POINTS;
                     }
                 }
                 // Check colision with player
@@ -682,7 +666,7 @@ void check_laser_collisions() {
                     if (aliens[j].active && aliens[j].x == laser->x) {
                         // Kill allien and update player score
                         aliens[j].active = 0;
-                        players[i].score++;
+                        players[i].score += KILL_POINTS;
                     }
                 }
                 // Check colision with player
@@ -691,7 +675,6 @@ void check_laser_collisions() {
                     if (players[j].player_id == 'E' && players[i].player_id == 'G') continue; //Player is behind laser
                     if (players[j].player_id == 'C' && players[i].player_id == 'B') continue; //Player is behind laser
                     if (players[j].x == laser->x) {
-                        //TODO: Check when is player behind
                         players[j].last_stun_time = time(NULL);
                     }
                 }
@@ -706,7 +689,7 @@ void update_alien_positions() {
     time_t current_time = time(NULL);
     
     // Only move aliens if 1 second has passed since last move
-    if (current_time - last_alien_move >= 1) {
+    if (current_time - last_alien_move >= ALIEN_MOVE_INTERVAL) {
         for (int i = 0; i < MAX_ALIENS; i++) {
             if (aliens[i].active) {
                 int direction = rand() % 4;

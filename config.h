@@ -2,8 +2,6 @@
 #define SPCINVDRS_CONFIG_H
 
 // Game Limits and Rules
-#define MAX_PLAYERS 8
-#define MAX_LASERS 8
 #define LASER_COOLDOWN 3     // seconds between laser fires
 #define STUN_DURATION 10     // seconds an astronaut is stunned
 #define ALIEN_MOVE_INTERVAL 1 // seconds between alien movements
@@ -23,11 +21,14 @@
 #define MAX_ALIENS 33  // 1/3 of grid area
 #define BUFFER_SIZE 2048
 
+// UI Positions
+// TODO: START USING THESE
 #define SCORE_START_Y 5
 #define SCORE_START_X (GRID_WIDTH + 6)
 #define SCORE_PADDING 4  // Space between grid and scores
 
 // Message Types
+// TODO: START USING
 #define MSG_CONNECT 1
 #define MSG_MOVEMENT 2
 #define MSG_ZAP 3
@@ -46,18 +47,9 @@
 #define MOVE_DOWN 'D'
 
 // Error Codes
+//TODO: START USING
 #define ERR_MAX_PLAYERS -1
 #define ERR_INVALID_MOVE -2
 #define ERR_LASER_COOLDOWN -3
-
-// Utility Macro for Error Checking
-#define CHECK_ZMSG(msg, ...) \
-    do { \
-        if (!(msg)) { \
-            fprintf(stderr, "Error in %s: ", __func__); \
-            fprintf(stderr, __VA_ARGS__); \
-            exit(1); \
-        } \
-    } while(0)
 
 #endif // SPCINVDRS_CONFIG_H
