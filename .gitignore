@@ -1,0 +1,23 @@
+# Ingore executables
+astronaut-client
+game-server
+outer-space-display
+
+# Ignore object files and executables
+*.o
+*.out
+*.exe
+
+# Ignore dependency files
+*.d
+
+# Ignore build directories
+/build/
+/bin/
+/obj/
+
+# Ignore editor and OS-specific files
+*.swp
+*~
+.DS_Store
+Thumbs.db

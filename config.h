@@ -1,6 +1,14 @@
 #ifndef SPCINVDRS_CONFIG_H
 #define SPCINVDRS_CONFIG_H
 
+// Game Limits and Rules
+#define MAX_PLAYERS 8
+#define MAX_LASERS 8
+#define LASER_COOLDOWN 3     // seconds between laser fires
+#define STUN_DURATION 10     // seconds an astronaut is stunned
+#define ALIEN_MOVE_INTERVAL 1 // seconds between alien movements
+#define KILL_POINTS 1
+
 // Network Configuration
 // config.h
 #define SERVER_ENDPOINT_REQ "tcp://*:5555"    // For REQ/REP with astronauts
@@ -36,14 +44,6 @@
 #define MOVE_RIGHT 'R'
 #define MOVE_UP 'U'
 #define MOVE_DOWN 'D'
-
-// Game Rules
-#define LASER_COOLDOWN 3     // seconds between laser fires
-#define STUN_DURATION 10     // seconds an astronaut is stunned
-#define ALIEN_MOVE_INTERVAL 1 // seconds between alien movements
-
-// Scoring
-#define KILL_POINTS 1
 
 // Error Codes
 #define ERR_MAX_PLAYERS -1

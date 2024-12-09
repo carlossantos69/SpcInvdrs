@@ -18,10 +18,15 @@ time_t last_alien_move = 0;
 #define ALIEN_AREA_START 2   // Where aliens can start moving
 #define ALIEN_AREA_END 17    // Where aliens must stop moving
 
-#define MAX_PLAYERS 8
-#define MAX_LASERS 8
-
 int game_over = 0;
+
+typedef struct {
+    int x;
+    int y;
+    char direction[10];
+    int active;
+    time_t creation_time; 
+} Laser_t;
 
 typedef struct {
     char player_id;
@@ -31,34 +36,101 @@ typedef struct {
     time_t last_fire_time;
     time_t last_stun_time;
     char session_token[33]; // 32-char hex token + null terminator
-} Player;
-
-typedef struct {
-    int x;
-    int y;
-    char direction[10]; //Probably could be removed because player_id gives direction
-    int active;
-    char player_id;
-    time_t creation_time; 
-} Laser;
+    Laser_t laser; //The laster of the player
+} Player_t;
 
 typedef struct {
     int x;
     int y;
     int active;
-} Alien;
+} Alien_t;
 
 typedef struct {
     char ch;            // Character to display at this cell
     time_t laser_time;  // Timestamp when the laser was drawn
-} Cell;
+} Cell_t;
 
 // Game state representation
-Cell grid[GRID_HEIGHT][GRID_WIDTH];
+Cell_t grid[GRID_HEIGHT][GRID_WIDTH];
 
-Player players[MAX_PLAYERS];
-Laser lasers[MAX_PLAYERS]; // One laser per player
-Alien aliens[MAX_ALIENS];
+Player_t players[MAX_PLAYERS];
+Alien_t aliens[MAX_ALIENS];
+
+// Auxiliary functions to find players by ID or session token
+Player_t* find_by_id(Player_t players[], char player_id) {
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].player_id == player_id) {
+            return &players[i];
+        }
+    }
+    return NULL;
+}
+Player_t* find_by_session_token(Player_t players[], const char* session_token) {
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (strcmp(players[i].session_token, session_token) == 0) {
+            return &players[i];
+        }
+    }
+    return NULL;
+}
+
+// Generate a random session token
+void generate_session_token(char* token) {
+    const char charset[] = "abcdef0123456789";
+    size_t length = 33;
+    for (size_t i = 0; i < length - 1; i++) {
+        size_t index = rand() % (sizeof(charset) - 1);
+        token[i] = charset[index];
+    }
+    token[length - 1] = '\0';
+}
+
+// Randomly assign an ID to a player
+char assign_player_id() {
+    char ids[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'};
+    int available_ids[MAX_PLAYERS];
+    int count = 0;
+
+    // Collect all available IDs
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (find_by_id(players, ids[i]) == NULL) {
+            available_ids[count++] = ids[i];
+        }
+    }
+
+    // If no IDs are available, return NULL
+    if (count == 0) {
+        return '\0';
+    }
+
+    // Select a random available ID
+    int random_index = rand() % count;
+    return available_ids[random_index];
+}
+
+/* OLD FUNCTION THAT IS SEQUENTIAL
+char assign_player_id() {
+    // Check IDs sequentially from A to H
+    for (char id = 'A'; id <= 'H'; id++) {
+        // Check if this ID is already taken
+        if (find_by_id(players, id) == NULL) {
+            return id;
+        }
+    }
+
+    return NULL; // No available slots
+}
+*/
+
+int all_aliens_destroyed() {
+    for (int i = 0; i < MAX_ALIENS; i++) {
+        if (aliens[i].active) {
+            return 0; // There is at least one alien still active
+        }
+    }
+    return 1; // All aliens are inactive
+}
+
 
 void update_game_state();
 
@@ -69,6 +141,9 @@ void initialize_game_state() {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         players[i].player_id = '\0';
         players[i].score = 0;
+        strcpy(players[i].session_token, "\0");
+        players[i].laser.active = 0;
+
     }
 
     // Initialize aliens at random positions within the inner grid
@@ -77,11 +152,6 @@ void initialize_game_state() {
         aliens[i].x = 5 + rand() % (GRID_WIDTH - 10);
         aliens[i].y = 5 + rand() % (GRID_HEIGHT - 10);
         aliens[i].active = 1;
-    }
-
-    // Initialize lasers
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        lasers[i].active = 0;
     }
 
     // Initialize grid to empty spaces
@@ -104,17 +174,6 @@ void clear_grid() {
 void update_grid() {
     clear_grid();
 
-    // Place players on the grid
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].player_id != '\0') {
-            int x = players[i].x;
-            int y = players[i].y;
-            if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
-                grid[y][x].ch = players[i].player_id;
-            }
-        }
-    }
-
     // Place aliens on the grid
     for (int i = 0; i < MAX_ALIENS; i++) {
         if (aliens[i].active) {
@@ -126,38 +185,49 @@ void update_grid() {
         }
     }
 
-    // Place lasers on the grid
+    // Place players and lasers on the grid
     time_t now = time(NULL);
-    for (int i = 0; i < MAX_LASERS; i++) {
-        if (lasers[i].active) {
-            Laser* laser = &lasers[i];
-            if (strcmp(laser->direction, "HORIZONTAL") == 0) {
-                int y = laser->y;
-                if (laser->player_id == 'A' || laser->player_id == 'H') {
-                    for (int x = laser->x; x < GRID_WIDTH; x++) {
-                        grid[y][x].ch = '-';
-                        grid[y][x].laser_time = now;
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].player_id != '\0') {
+            // Place player on the grid
+            int x = players[i].x;
+            int y = players[i].y;
+            if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
+                grid[y][x].ch = players[i].player_id;
+            }
+
+            // Place laser on the grid
+            if (players[i].laser.active) {
+                Laser_t* laser = &players[i].laser;
+                if (strcmp(laser->direction, "HORIZONTAL") == 0) {
+                    int y = laser->y;
+                    if (players[i].player_id == 'A' || players[i].player_id == 'H') {
+                        for (int x = laser->x; x < GRID_WIDTH; x++) {
+                            grid[y][x].ch = '-';
+                            grid[y][x].laser_time = now;
+                        }
+                    } else if (players[i].player_id == 'D' || players[i].player_id == 'F') {
+                        for (int x = laser->x; x >= 0; x--) {
+                            grid[y][x].ch = '-';
+                            grid[y][x].laser_time = now;
+                        }
                     }
-                } else if (laser->player_id == 'D' || laser->player_id == 'F') {
-                    for (int x = laser->x; x >= 0; x--) {
-                        grid[y][x].ch = '-';
-                        grid[y][x].laser_time = now;
-                    }
-                }
-            } else if (strcmp(laser->direction, "VERTICAL") == 0) {
-                int x = laser->x;
-                if (laser->player_id == 'E' || laser->player_id == 'G') {
-                    for (int y = laser->y; y < GRID_HEIGHT; y++) {
-                        grid[y][x].ch = '|';
-                        grid[y][x].laser_time = now;
-                    }
-                } else if (laser->player_id == 'B' || laser->player_id == 'C') {
-                    for (int y = laser->y; y >= 0; y--) {
-                        grid[y][x].ch = '|';
-                        grid[y][x].laser_time = now;
+                } else if (strcmp(laser->direction, "VERTICAL") == 0) {
+                    int x = laser->x;
+                    if (players[i].player_id == 'E' || players[i].player_id == 'G') {
+                        for (int y = laser->y; y < GRID_HEIGHT; y++) {
+                            grid[y][x].ch = '|';
+                            grid[y][x].laser_time = now;
+                        }
+                    } else if (players[i].player_id == 'B' || players[i].player_id == 'C') {
+                        for (int y = laser->y; y >= 0; y--) {
+                            grid[y][x].ch = '|';
+                            grid[y][x].laser_time = now;
+                        }
                     }
                 }
             }
+
         }
     }
 }
@@ -188,9 +258,8 @@ void draw_scores() {
     }
 }
 
+// Draw the grid with borders and coordinates
 void draw_grid() {
-    // Draw the grid with borders and coordinates
-
     // Draw row numbers on the left
     for (int i = 0; i < GRID_HEIGHT; i++) {
         mvprintw(i + 3, 1, "%d", (i + 1) % 10);
@@ -252,43 +321,6 @@ void draw_grid() {
     refresh();
 }
 
-void generate_session_token(char* token, size_t length) {
-    const char charset[] = "abcdef0123456789";
-    for (size_t i = 0; i < length - 1; i++) {
-        size_t index = rand() % (sizeof(charset) - 1);
-        token[i] = charset[index];
-    }
-    token[length - 1] = '\0';
-}
-
-char assign_player_id() {
-    // Check IDs sequentially from A to H
-    for (char id = 'A'; id <= 'H'; id++) {
-        int id_taken = 0;
-        // Check if this ID is already taken
-        for (int i = 0; i < MAX_PLAYERS; i++) {
-            if (players[i].player_id == id) {
-                id_taken = 1;
-                break;
-            }
-        }
-        // If ID is not taken, return it
-        if (!id_taken) {
-            return id;
-        }
-    }
-    return '\0'; // No available slots
-}
-
-int all_aliens_destroyed() {
-    for (int i = 0; i < MAX_ALIENS; i++) {
-        if (aliens[i].active) {
-            return 0; // There is at least one alien still active
-        }
-    }
-    return 1; // All aliens are inactive
-}
-
 void send_game_state() {
     char message[BUFFER_SIZE] = "";
     char temp[100];
@@ -308,6 +340,17 @@ void send_game_state() {
                     players[i].player_id,
                     players[i].score);
             strcat(message, temp);
+
+            // Add laser information
+            if (players[i].laser.active) {
+                snprintf(temp, sizeof(temp), "LASER %d %d %s %c\n",
+                        players[i].laser.x,
+                        players[i].laser.y,
+                        players[i].laser.direction,
+                        players[i].player_id);
+                strcat(message, temp);
+            }
+
         }
     }
 
@@ -321,23 +364,11 @@ void send_game_state() {
         }
     }
 
-    // Add all active lasers
-    for (int i = 0; i < MAX_LASERS; i++) {
-        if (lasers[i].active) {
-            snprintf(temp, sizeof(temp), "LASER %d %d %s %c\n",
-                    lasers[i].x,
-                    lasers[i].y,
-                    lasers[i].direction,
-                    lasers[i].player_id);
-            strcat(message, temp);
-        }
-    }
-
     // Send the message
     zmq_send(publisher, message, strlen(message), 0);
 }
 
-int is_valid_move(Player* player, const char* direction) {
+int is_valid_move(Player_t* player, const char* direction) {
     // Get current position
     int new_x = player->x;
     int new_y = player->y;
@@ -385,7 +416,8 @@ int is_valid_move(Player* player, const char* direction) {
     return 0;
 }
 
-void initialize_player_position(Player* player, char id) {
+// TODO: Make random spawn position inside of availabe row/collum
+void initialize_player_position(Player_t* player, char id) {
     switch(id) {
         case 'A': // First column (x=0)
             player->x = 0;
@@ -443,8 +475,9 @@ void process_client_message(char* message, char* response) {
                     players[i].score = 0;
                     players[i].last_fire_time = 0;
                     players[i].last_stun_time = 0;
+                    players[i].laser.active = 0;
 
-                    generate_session_token(players[i].session_token, 33);
+                    generate_session_token(players[i].session_token);
 
                     initialize_player_position(&players[i], new_id);
                     sprintf(response, "%c %s", new_id, players[i].session_token);
@@ -502,20 +535,19 @@ void process_client_message(char* message, char* response) {
         return;
     }
 
-    Player* player = NULL;
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].player_id == player_id &&
-            strcmp(players[i].session_token, session_token) == 0) {
-            player = &players[i];
-            break;
-        }
-    }
-
+    // Find the player based on the provided player ID and session token
+    Player_t* player = find_by_id(players, player_id);
     if (!player) {
         strncpy(response, "ERROR Invalid player ID or session token", BUFFER_SIZE - 1);
         response[BUFFER_SIZE - 1] = '\0';
         return;
+    } 
+    if (strcmp(player->session_token, session_token) != 0) {
+        strncpy(response, "ERROR Invalid player ID or session token", BUFFER_SIZE - 1);
+        response[BUFFER_SIZE - 1] = '\0';
+        return;
     }
+
 
     // Command handling with checks
     if (strcmp(cmd, "MOVE") == 0) {
@@ -555,43 +587,40 @@ void process_client_message(char* message, char* response) {
             return;
         }
         if (difftime(current_time, player->last_stun_time) < STUN_DURATION) {
-            // TODO: IS LASER SUPOSED TO BE BLOCKED WHILE STUNED OR ONLY MOVEMENT?
             strcpy(response, "ERROR Player stunned");
             return;
         }
         player->last_fire_time = current_time;
-        int laser_index = player_id - 'A';
-        if (lasers[laser_index].active) {
+        if (player->laser.active) {
             strcpy(response, "ERROR Laser already active");
             return;
         }
 
         // Determine laser direction based on player's id
         if (player->player_id == 'A' || player->player_id == 'H' || player->player_id == 'D' || player->player_id == 'F') {
-            strcpy(lasers[laser_index].direction, "HORIZONTAL");
+            strcpy(player->laser.direction, "HORIZONTAL");
             if (player->player_id == 'A' || player->player_id == 'H') {
-                lasers[laser_index].x = player->x + 1; // Start right of player
-                lasers[laser_index].y = player->y;
-                //printf("Player %c fired a laser from %d, %d\n", player_id, lasers[laser_index].x, lasers[laser_index].y);
+                player->laser.x = player->x + 1; // Start right of player
+                player->laser.y = player->y;
+                //printf("Player %c fired a laser from %d, %d\n", player_id, player->laser.x, player->laser.y);
             } else {
-                lasers[laser_index].x = player->x - 1;  // Start left of player
-                lasers[laser_index].y = player->y;
+                player->laser.x = player->x - 1;  // Start left of player
+                player->laser.y = player->y;
             }
         } else {
-            strcpy(lasers[laser_index].direction, "VERTICAL");
+            strcpy(player->laser.direction, "VERTICAL");
             if (player->player_id == 'B' || player->player_id == 'C') {
-                lasers[laser_index].y = player->y - 1;
-                lasers[laser_index].x = player->x;
+                player->laser.y = player->y - 1;
+                player->laser.x = player->x;
             } else {
-                lasers[laser_index].y = player->y + 1;
-                lasers[laser_index].x = player->x;
+                player->laser.y = player->y + 1;
+                player->laser.x = player->x;
             }
         }
 
         // Initialize laser position
-        lasers[laser_index].active = 1;
-        lasers[laser_index].player_id = player_id;
-        lasers[laser_index].creation_time = current_time;
+        player->laser.active = 1;
+        player->laser.creation_time = current_time;
 
         // Update game state
         update_game_state();
@@ -605,15 +634,16 @@ void process_client_message(char* message, char* response) {
         // Send updated state to display
         send_game_state();
 
-        //printf("Player %c fired a laser %s.\n", player_id, lasers[laser_index].direction);
+        //printf("Player %c fired a laser %s.\n", player_id, player->laser.direction);
         snprintf(response, BUFFER_SIZE, "OK %d", player->score);
     } else if (strcmp(cmd, "DISCONNECT") == 0) {
+        // TODO: PASS THIS TO A FUNCTION REMOVE_OR_INIT_PLAYER() THAT CLEARS THE PLAYER
         player->player_id = '\0';
-        memset(player->session_token, 0, sizeof(player->session_token));
+        player->session_token[0] = '\0';
         player->score = 0;
         player->x = 0;
         player->y = 0;
-        lasers[player_id - 'A'].active = 0;
+        player->laser.active = 0;
         //printf("Player %c disconnected.\n", player_id);
         strcpy(response, "OK");
     } else {
@@ -625,28 +655,23 @@ void process_client_message(char* message, char* response) {
 
 void check_laser_collisions() {
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (lasers[i].active) {
-            Laser* laser = &lasers[i];
+        if (players[i].laser.active) {
+            Laser_t* laser = &players[i].laser;
             // Traverse the grid based on laser direction and player position
             if (strcmp(laser->direction, "HORIZONTAL") == 0) {
                 // Check collision with alliens
                 for (int j = 0; j < MAX_ALIENS; j++) {
                     if (aliens[j].active && aliens[j].y == laser->y) {
+                        // Kill allien and update player score
                         aliens[j].active = 0;
-                        // Update player score
-                        for (int k = 0; k < MAX_PLAYERS; k++) {
-                            if (players[k].player_id == laser->player_id) {
-                                players[k].score++;
-                                break;
-                            }
-                        }
+                        players[i].score++;
                     }
                 }
                 // Check colision with player
                 for (int j = 0; j < MAX_PLAYERS; j++) {
-                    if (players[j].player_id == laser->player_id) continue;
-                    if (players[j].player_id == 'A' && laser->player_id == 'H') continue; //Player is behind laser
-                    if (players[j].player_id == 'F' && laser->player_id == 'D') continue; //Player is behind laser
+                    if (players[j].player_id == players[i].player_id) continue;
+                    if (players[j].player_id == 'A' && players[i].player_id == 'H') continue; //Player is behind laser
+                    if (players[j].player_id == 'F' && players[i].player_id == 'D') continue; //Player is behind laser
                     if (players[j].y == laser->y) {
                         players[j].last_stun_time = time(NULL);
                     }
@@ -655,21 +680,16 @@ void check_laser_collisions() {
                 // Check collision with alliens
                 for (int j = 0; j < MAX_ALIENS; j++) {
                     if (aliens[j].active && aliens[j].x == laser->x) {
+                        // Kill allien and update player score
                         aliens[j].active = 0;
-                        // Update player score
-                        for (int k = 0; k < MAX_PLAYERS; k++) {
-                            if (players[k].player_id == laser->player_id) {
-                                players[k].score++;
-                                break;
-                            }
-                        }
+                        players[i].score++;
                     }
                 }
                 // Check colision with player
                 for (int j = 0; j < MAX_PLAYERS; j++) {
-                    if (players[j].player_id == laser->player_id) continue;
-                    if (players[j].player_id == 'E' && laser->player_id == 'G') continue; //Player is behind laser
-                    if (players[j].player_id == 'C' && laser->player_id == 'B') continue; //Player is behind laser
+                    if (players[j].player_id == players[i].player_id) continue;
+                    if (players[j].player_id == 'E' && players[i].player_id == 'G') continue; //Player is behind laser
+                    if (players[j].player_id == 'C' && players[i].player_id == 'B') continue; //Player is behind laser
                     if (players[j].x == laser->x) {
                         //TODO: Check when is player behind
                         players[j].last_stun_time = time(NULL);
@@ -731,9 +751,9 @@ void update_game_state() {
     check_laser_collisions();
     
     // Deactivate lasers after 0.5 seconds
-    for (int i = 0; i < MAX_LASERS; i++) {
-        if (lasers[i].active && difftime(current_time, lasers[i].creation_time) >= 0.5) {
-            lasers[i].active = 0;
+    for (int i = 0; i < MAX_PLAYERS; ++i) {
+        if (players[i].laser.active && difftime(current_time, players[i].laser.creation_time) >= 0.5) {
+            players[i].laser.active = 0;
         }
     }
 

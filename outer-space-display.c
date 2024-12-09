@@ -29,17 +29,17 @@ typedef struct {
     char player_id;
     int score;
     int active;  // flag to track if we've seen this player
-} Player;
+} Player_t;
 
 typedef struct {
     char ch;
     time_t laser_time; // Timestamp when the laser was drawn
-} Cell;
+} Cell_t;
 
-Player players[MAX_PLAYERS];  // Array to store players
+Player_t players[MAX_PLAYERS];  // Array to store players
 
 // Game state representation
-Cell grid[GRID_HEIGHT][GRID_WIDTH];
+Cell_t grid[GRID_HEIGHT][GRID_WIDTH];
 
 void initialize_display() {
     // Initialize ncurses mode
