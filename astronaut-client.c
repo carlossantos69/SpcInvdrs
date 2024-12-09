@@ -86,28 +86,28 @@ void handle_key_input() {
     char buffer[BUFFER_SIZE];
     switch (ch) {
         case KEY_UP:
-            snprintf(buffer, sizeof(buffer), "MOVE %c %s UP", player_id, session_token);
+            snprintf(buffer, sizeof(buffer), "%c %c %s UP", CMD_MOVE, player_id, session_token);
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case KEY_DOWN:
-            snprintf(buffer, sizeof(buffer), "MOVE %c %s DOWN", player_id, session_token);
+            snprintf(buffer, sizeof(buffer), "%c %c %s DOWN", CMD_MOVE, player_id, session_token);
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case KEY_LEFT:
-            snprintf(buffer, sizeof(buffer), "MOVE %c %s LEFT", player_id, session_token);
+            snprintf(buffer, sizeof(buffer), "%c %c %s LEFT", CMD_MOVE, player_id, session_token);
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case KEY_RIGHT:
-            snprintf(buffer, sizeof(buffer), "MOVE %c %s RIGHT", player_id, session_token);
+            snprintf(buffer, sizeof(buffer), "%c %c %s RIGHT", CMD_MOVE, player_id, session_token);
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case ' ':
-            snprintf(buffer, sizeof(buffer), "ZAP %c %s", player_id, session_token);
+            snprintf(buffer, sizeof(buffer), "%c %c %s", MSG_ZAP, player_id, session_token);
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case 'q':
         case 'Q':
-            snprintf(buffer, sizeof(buffer), "DISCONNECT %c %s", player_id, session_token);
+            snprintf(buffer, sizeof(buffer), "%c %c %s", CMD_DISCONNECT, player_id, session_token);
             zmq_send(requester, buffer, strlen(buffer), 0);
             // Clean up and exit
             endwin();

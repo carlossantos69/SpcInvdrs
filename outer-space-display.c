@@ -112,31 +112,14 @@ void update_grid(char* update_message) {
      // Parse the message line by line
     char* line = strtok(update_message, "\n");
     while (line != NULL) {
-        if (strncmp(line, "GAME_OVER", 9) == 0) {
+        if (line[0] == CMD_GAME_OVER) {
             game_over = 1; // Set a flag to indicate the game is over
 
-            // Parse final scores
-            line = strtok(NULL, "\n");
-            while (line != NULL) {
-                if (strncmp(line, "FINAL_SCORE", 11) == 0) {
-                    char id;
-                    int player_score;
-                    sscanf(line, "FINAL_SCORE %c %d", &id, &player_score);
 
-                    int idx = id - 'A';
-                    if (idx >= 0 && idx < MAX_PLAYERS) {
-                        players[idx].player_id = id;
-                        players[idx].score = player_score;
-                        players[idx].active = 1;
-                    }
-                }
-                line = strtok(NULL, "\n");
-            }
-            break; // Exit the outer parsing loop as we've reached the end
-        } else if (strncmp(line, "PLAYER", 6) == 0) {
+        } else if (line[0] == CMD_PLAYER) {
             char id;
             int x, y;
-            sscanf(line, "PLAYER %c %d %d", &id, &x, &y);
+            sscanf(line, "%*c %c %d %d", &id, &x, &y);
             
             if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
                 grid[y][x].ch = id;
@@ -148,60 +131,58 @@ void update_grid(char* update_message) {
                     //mvprintw(DEBUG_LINE, 0, "Player %c active at index %d", id, idx);
                 }
             }
-        } else if (strncmp(line, "ALIEN", 5) == 0) {
+        } else if (line[0] == CMD_ALIEN) {
             // Format: ALIEN <x> <y>
             int x, y;
-            sscanf(line, "ALIEN %d %d", &x, &y);
+            sscanf(line, "%*c %d %d", &x, &y);
             if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
                 grid[y][x].ch = '*'; // Represent aliens with '*'
             }
-        } else if (strncmp(line, "LASER", 5) == 0) {
+        } else if (line[0] == CMD_LASER) {
             int x, y;
-            char direction[10];
-            char player_id;
-            sscanf(line, "LASER %d %d %s %c", &x, &y, direction, &player_id);
+            int zone;
+            sscanf(line, "%*c %d %d %d", &x, &y, &zone);
             
             time_t now = time(NULL);
             
-            if (strcmp(direction, "HORIZONTAL") == 0) {
-                if (player_id == 'A' || player_id == 'H') {
-                    for (int i = x; i < GRID_WIDTH; i++) {
-                        grid[y][i].ch = LASER_HORIZONTAL;
-                        grid[y][i].laser_time = now;
-                    }
-                } else if (player_id == 'D' || player_id == 'F') {
-                    for (int i = x; i >= 0; i--) {
-                        grid[y][i].ch = LASER_HORIZONTAL;
-                        grid[y][i].laser_time = now;
-                    }
+            if (zone == ZONE_A || zone == ZONE_H) {
+                for (int i = x; i < GRID_WIDTH; i++) {
+                    grid[y][i].ch = LASER_HORIZONTAL;
+                    grid[y][i].laser_time = now;
                 }
-            } else if (strcmp(direction, "VERTICAL") == 0) {
-                if (player_id == 'E' || player_id == 'G') {
-                    for (int i = y; i < GRID_HEIGHT; i++) {
-                        grid[i][x].ch = LASER_VERTICAL;
-                        grid[i][x].laser_time = now;
-                    }
-                } else if (player_id == 'B' || player_id == 'C') {
-                    for (int i = y; i >= 0; i--) {
-                        grid[i][x].ch = LASER_VERTICAL;
-                        grid[i][x].laser_time = now;
-                    }
+            } else if (zone == ZONE_D || zone == ZONE_F) {
+                for (int i = x; i >= 0; i--) {
+                    grid[y][i].ch = LASER_HORIZONTAL;
+                    grid[y][i].laser_time = now;
                 }
             }
-        } else if (strncmp(line, "SCORE", 5) == 0) {
+            if (zone == ZONE_E || zone == ZONE_G) {
+                for (int i = y; i < GRID_HEIGHT; i++) {
+                    grid[i][x].ch = LASER_VERTICAL;
+                    grid[i][x].laser_time = now;
+                }
+            } else if (zone == ZONE_B || zone == ZONE_C) {
+                for (int i = y; i >= 0; i--) {
+                    grid[i][x].ch = LASER_VERTICAL;
+                    grid[i][x].laser_time = now;
+                }
+            }
+            
+        } else if (line[0] == CMD_SCORE) {
             char id;
             int player_score;
-            sscanf(line, "SCORE %c %d", &id, &player_score);
+            sscanf(line, "%*c %c %d", &id, &player_score);
             
             int idx = id - 'A';
             if (idx >= 0 && idx < MAX_PLAYERS) {
+                players[idx].active = 1;
                 players[idx].score = player_score;
                 //mvprintw(DEBUG_LINE, 40, "Score update: Player %c = %d", id, player_score);
             }
         }
-            // Move to the next line
-            line = strtok(NULL, "\n");
-        }
+        // Move to the next line
+        line = strtok(NULL, "\n");
+    }
 }
 
 void draw_scores() {

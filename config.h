@@ -18,7 +18,7 @@
 #define GRID_WIDTH 20
 #define GRID_HEIGHT 20
 #define MAX_PLAYERS 8
-#define MAX_ALIENS 33  // 1/3 of grid area
+#define MAX_ALIENS 6  // 1/3 of grid area
 #define BUFFER_SIZE 2048
 
 // UI Positions
@@ -27,29 +27,45 @@
 #define SCORE_START_X (GRID_WIDTH + 6)
 #define SCORE_PADDING 4  // Space between grid and scores
 
-// Message Types
-// TODO: START USING
-#define MSG_CONNECT 1
-#define MSG_MOVEMENT 2
-#define MSG_ZAP 3
-#define MSG_DISCONNECT 4
-#define MSG_UPDATE 5
-
 // Color pair definitions
 #define COLOR_ASTRONAUT 1
 #define COLOR_ALIEN 2
 #define COLOR_LASER 3
 
-// Movement Directions
-#define MOVE_LEFT 'L'
-#define MOVE_RIGHT 'R'
+// Command types
+#define CMD_PLAYER 'P'
+#define CMD_LASER 'L'
+#define CMD_ALIEN 'A'
+#define CMD_SCORE 'S'
+#define CMD_GAME_OVER 'G'
+#define CMD_CONNECT 'C'
+#define CMD_DISCONNECT 'D'
+#define CMD_MOVE 'M'
+#define MSG_ZAP 'Z'
+
+// Command Movement Directions
 #define MOVE_UP 'U'
 #define MOVE_DOWN 'D'
+#define MOVE_LEFT 'L'
+#define MOVE_RIGHT 'R'
 
-// Error Codes
-//TODO: START USING
+// Player Zones
+#define ZONE_A 1
+#define ZONE_B 2
+#define ZONE_C 3
+#define ZONE_D 4
+#define ZONE_E 5
+#define ZONE_F 6
+#define ZONE_G 7
+#define ZONE_H 8
+
+// Command responses and error Codes
+//TODO: START USING THEM
+// TODO: Add more responses and use them
+#define RESP_OK "OK"
+#define RESP_ERROR "ERROR"
 #define ERR_MAX_PLAYERS -1
 #define ERR_INVALID_MOVE -2
 #define ERR_LASER_COOLDOWN -3
 
-#endif // SPCINVDRS_CONFIG_H
+#endif // SPCINVDRS_CONFIG

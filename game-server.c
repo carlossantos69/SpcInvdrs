@@ -24,20 +24,20 @@ int game_over = 0;
 typedef struct {
     int x;
     int y;
-    char direction[10];
     int active;
     time_t creation_time; 
 } Laser_t;
 
 typedef struct {
-    char player_id;
+    char id;
+    int zone;
     int x;
     int y;
     int score;
     time_t last_fire_time;
     time_t last_stun_time;
     char session_token[33]; // 32-char hex token + null terminator
-    Laser_t laser; //The laster of the player
+    Laser_t laser; //The laser of the player 
 } Player_t;
 
 typedef struct {
@@ -53,14 +53,13 @@ typedef struct {
 
 // Game state representation
 Cell_t grid[GRID_HEIGHT][GRID_WIDTH];
-
 Player_t players[MAX_PLAYERS];
 Alien_t aliens[MAX_ALIENS];
 
 // Auxiliary functions to find players by ID or session token
 Player_t* find_by_id(const char id) {
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].player_id == id) {
+        if (players[i].id == id) {
             return &players[i];
         } 
     }
@@ -69,6 +68,14 @@ Player_t* find_by_id(const char id) {
 Player_t* find_by_session_token(const char* session_token) {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (strcmp(players[i].session_token, session_token) == 0) {
+            return &players[i];
+        }
+    }
+    return NULL;
+}
+Player_t* find_by_zone(const char zone) {
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].zone == zone) {
             return &players[i];
         }
     }
@@ -109,10 +116,23 @@ char assign_player_id() {
     return available_ids[random_index];
 }
 
+
+// Return a random zone to put the player
+int get_random_zone() {
+    int zones[] = {ZONE_A, ZONE_B, ZONE_C, ZONE_D, ZONE_E, ZONE_F, ZONE_G, ZONE_H};
+    int random_zone;
+    while (true) {
+        random_zone = zones[rand() % 8]; // There are 8 zones
+        if (find_by_zone(random_zone) == NULL) {
+            return random_zone;
+        }
+    }
+}
+
 void clear_player(Player_t *player) {
     if (player == NULL) return;
 
-    player->player_id = '\0';
+    player->id = '\0';
     player->score = 0;
     player->last_fire_time = 0;
     player->last_stun_time = 0;
@@ -183,42 +203,41 @@ void update_grid() {
     // Place players and lasers on the grid
     time_t now = time(NULL);
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].player_id != '\0') {
+        if (players[i].id != '\0') {
             // Place player on the grid
             int x = players[i].x;
             int y = players[i].y;
             if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
-                grid[y][x].ch = players[i].player_id;
+                grid[y][x].ch = players[i].id;
             }
 
             // Place laser on the grid
             if (players[i].laser.active) {
                 Laser_t* laser = &players[i].laser;
-                if (strcmp(laser->direction, "HORIZONTAL") == 0) {
-                    int y = laser->y;
-                    if (players[i].player_id == 'A' || players[i].player_id == 'H') {
-                        for (int x = laser->x; x < GRID_WIDTH; x++) {
-                            grid[y][x].ch = '-';
-                            grid[y][x].laser_time = now;
-                        }
-                    } else if (players[i].player_id == 'D' || players[i].player_id == 'F') {
-                        for (int x = laser->x; x >= 0; x--) {
-                            grid[y][x].ch = '-';
-                            grid[y][x].laser_time = now;
-                        }
+                int y = laser->y;
+                int x = laser->x;
+                if (players[i].zone == ZONE_A || players[i].zone == ZONE_H) {
+                    for (int x = laser->x; x < GRID_WIDTH; x++) {
+                        grid[y][x].ch = '-';
+                        grid[y][x].laser_time = now;
                     }
-                } else if (strcmp(laser->direction, "VERTICAL") == 0) {
-                    int x = laser->x;
-                    if (players[i].player_id == 'E' || players[i].player_id == 'G') {
-                        for (int y = laser->y; y < GRID_HEIGHT; y++) {
-                            grid[y][x].ch = '|';
-                            grid[y][x].laser_time = now;
-                        }
-                    } else if (players[i].player_id == 'B' || players[i].player_id == 'C') {
-                        for (int y = laser->y; y >= 0; y--) {
-                            grid[y][x].ch = '|';
-                            grid[y][x].laser_time = now;
-                        }
+                } else if (players[i].zone == ZONE_D || players[i].zone == ZONE_F) {
+                    for (int x = laser->x; x >= 0; x--) {
+                        grid[y][x].ch = '-';
+                        grid[y][x].laser_time = now;
+                    }
+                }
+                
+                    
+                if (players[i].zone == ZONE_E || players[i].zone == ZONE_G) {
+                    for (int y = laser->y; y < GRID_HEIGHT; y++) {
+                        grid[y][x].ch = '|';
+                        grid[y][x].laser_time = now;
+                    }
+                } else if (players[i].zone == ZONE_B || players[i].zone == ZONE_C) {
+                    for (int y = laser->y; y >= 0; y--) {
+                        grid[y][x].ch = '|';
+                        grid[y][x].laser_time = now;
                     }
                 }
             }
@@ -244,10 +263,10 @@ void draw_scores() {
 
     // Display scores for all active players
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].player_id != '\0') {
+        if (players[i].id != '\0') {
             attron(COLOR_PAIR(COLOR_ASTRONAUT));
             mvprintw(line++, SCORE_START_X, "Astronaut %c: %d", 
-                     players[i].player_id, players[i].score);
+                     players[i].id, players[i].score);
             attroff(COLOR_PAIR(COLOR_ASTRONAUT));
         }
     }
@@ -323,26 +342,29 @@ void send_game_state() {
     // Add all active players to message
     // Add all active players and their positions
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].player_id != '\0') {
-            snprintf(temp, sizeof(temp), "PLAYER %c %d %d\n", 
-                    players[i].player_id, 
+        if (players[i].id != '\0') {
+            // Add player information
+            snprintf(temp, sizeof(temp), "%c %c %d %d\n",
+                    CMD_PLAYER,
+                    players[i].id, 
                     players[i].x, 
                     players[i].y);
             strcat(message, temp);
             
             // Add score information
-            snprintf(temp, sizeof(temp), "SCORE %c %d\n",
-                    players[i].player_id,
+            snprintf(temp, sizeof(temp), "%c %c %d\n",
+                    CMD_SCORE,
+                    players[i].id,
                     players[i].score);
             strcat(message, temp);
 
             // Add laser information
             if (players[i].laser.active) {
-                snprintf(temp, sizeof(temp), "LASER %d %d %s %c\n",
+                snprintf(temp, sizeof(temp), "%c %d %d %d\n",
+                        CMD_LASER,
                         players[i].laser.x,
                         players[i].laser.y,
-                        players[i].laser.direction,
-                        players[i].player_id);
+                        players[i].zone);
                 strcat(message, temp);
             }
 
@@ -352,7 +374,8 @@ void send_game_state() {
     // Add all active aliens
     for (int i = 0; i < MAX_ALIENS; i++) {
         if (aliens[i].active) {
-            snprintf(temp, sizeof(temp), "ALIEN %d %d\n",
+            snprintf(temp, sizeof(temp), "%c %d %d\n",
+                    CMD_ALIEN,
                     aliens[i].x,
                     aliens[i].y);
             strcat(message, temp);
@@ -363,48 +386,50 @@ void send_game_state() {
     zmq_send(publisher, message, strlen(message), 0);
 }
 
-int is_valid_move(Player_t* player, const char* direction) {
+
+// Checks if movement is valid based on player zone
+int is_valid_move(Player_t* player, const char direction) {
     // Get current position
     int new_x = player->x;
     int new_y = player->y;
     
     // Calculate potential new position
-    if (strcmp(direction, "LEFT") == 0) new_x--;
-    else if (strcmp(direction, "RIGHT") == 0) new_x++;
-    else if (strcmp(direction, "UP") == 0) new_y--;
-    else if (strcmp(direction, "DOWN") == 0) new_y++;
+    if (direction == MOVE_LEFT) new_x--;
+    else if (direction == MOVE_RIGHT) new_x++;
+    else if (direction == MOVE_UP) new_y--;
+    else if (direction == MOVE_DOWN) new_y++;
     
     // Check movement based on id
-    switch(player->player_id) {
-        case 'A': // Left side vertical movement
+    switch(player->zone) {
+        case ZONE_A: // Left side vertical movement
             if (new_x != 0) return 0;  // Must stay in leftmost column
             return (new_y >= BORDER_OFFSET && new_y <= GRID_HEIGHT - BORDER_OFFSET - 1);
             
-        case 'H': // Left side vertical movement (middle)
+        case ZONE_H: // Left side vertical movement (middle)
             if (new_x != 1) return 0;
             return (new_y >= BORDER_OFFSET && new_y <= GRID_HEIGHT - BORDER_OFFSET - 1);
             
-        case 'D': // Right side vertical movement
+        case ZONE_D: // Right side vertical movement
             if (new_x != GRID_WIDTH - 2) return 0;  // Must stay in rightmost column
             return (new_y >= BORDER_OFFSET && new_y <= GRID_HEIGHT - BORDER_OFFSET - 1);
             
-        case 'F': // Right side vertical movement (middle)
+        case ZONE_F: // Right side vertical movement (middle)
             if (new_x != GRID_WIDTH - 1) return 0;
             return (new_y >= BORDER_OFFSET && new_y <= GRID_HEIGHT - BORDER_OFFSET - 1);
             
-        case 'E': // Top horizontal movement
+        case ZONE_E: // Top horizontal movement
             if (new_y != 0) return 0;  // Must stay in top row
             return (new_x >= BORDER_OFFSET && new_x <= GRID_WIDTH - BORDER_OFFSET - 1);
             
-        case 'G': // Top horizontal movement (right side)
+        case ZONE_G: // Top horizontal movement (right side)
             if (new_y != 1) return 0;
             return (new_x >= BORDER_OFFSET && new_x <= GRID_WIDTH - BORDER_OFFSET - 1);
             
-        case 'B': // Bottom horizontal movement (left side)
+        case ZONE_B: // Bottom horizontal movement (left side)
             if (new_y != GRID_HEIGHT - 2) return 0;  // Must stay in bottom row
             return (new_x >= BORDER_OFFSET && new_x <= GRID_WIDTH - BORDER_OFFSET - 1);
             
-        case 'C': // Bottom horizontal movement
+        case ZONE_C: // Bottom horizontal movement
             if (new_y != GRID_HEIGHT - 1) return 0;
             return (new_x >= BORDER_OFFSET && new_x <= GRID_WIDTH - BORDER_OFFSET - 1);
     }
@@ -412,44 +437,44 @@ int is_valid_move(Player_t* player, const char* direction) {
 }
 
 // TODO: Make random spawn position inside of availabe row/collum
-void initialize_player_position(Player_t* player, char id) {
-    switch(id) {
-        case 'A': // First column (x=0)
+void initialize_player_position(Player_t* player) {
+    switch(player->zone) {
+        case ZONE_A: // First column (x=0)
             player->x = 0;
             player->y = 2; // Start in the first available position after corner
             break;
             
-        case 'H': // Second column (x=1)
+        case ZONE_H: // Second column (x=1)
             player->x = 1;
             player->y = 2; // Start in the first available position after corner
             break;
             
-        case 'G': // Second-to-last row (y=1)
+        case ZONE_G: // Second-to-last row (y=1)
             player->x = 2; // Start after corner
             player->y = 1;
             break;
             
-        case 'E': // Last row (y=0)
+        case ZONE_E: // Last row (y=0)
             player->x = 2; // Start after corner
             player->y = 0;
             break;
             
-        case 'D': // Second-to-last column (x=18)
+        case ZONE_D: // Second-to-last column (x=18)
             player->x = GRID_WIDTH - 2;
             player->y = 2; // Start after corner
             break;
             
-        case 'F': // Last column (x=19)
+        case ZONE_F: // Last column (x=19)
             player->x = GRID_WIDTH - 1;
             player->y = 2; // Start after corner
             break;
             
-        case 'C': // First row from bottom (y=19)
+        case ZONE_C: // First row from bottom (y=19)
             player->x = 2; // Start after corner
             player->y = GRID_HEIGHT - 1;
             break;
             
-        case 'B': // Second row from bottom (y=18)
+        case ZONE_B: // Second row from bottom (y=18)
             player->x = 2; // Start after corner
             player->y = GRID_HEIGHT - 2;
             break;
@@ -460,17 +485,17 @@ void initialize_player_position(Player_t* player, char id) {
 
 void process_client_message(char* message, char* response) {
     //printf("Received message: %s\n", message);
-
-    if (strncmp(message, "CONNECT", 7) == 0) {
+    if (message[0] == CMD_CONNECT) {
         char new_id = assign_player_id();
         if (new_id != '\0') {
             // Find available player id and initialize a new player
             for (int i = 0; i < MAX_PLAYERS; i++) {
-                if (players[i].player_id == '\0') {
+                if (players[i].id == '\0') {
                     clear_player(&players[i]); // Probably redundant
-                    players[i].player_id = new_id;
+                    players[i].id = new_id;
                     generate_session_token(players[i].session_token);
-                    initialize_player_position(&players[i], new_id);
+                    players[i].zone = get_random_zone();
+                    initialize_player_position(&players[i]);
                     sprintf(response, "%c %s", new_id, players[i].session_token);
                     //printf("New player %c initialized at (%d,%d) with session token %s\n",new_id, players[i].x, players[i].y, players[i].session_token);
 
@@ -484,10 +509,10 @@ void process_client_message(char* message, char* response) {
     }
 
     // Validate session token and player ID
-    char cmd[16] = {0};
+    char cmd;
     char player_id;
     char session_token[33];
-    int num_parsed = sscanf(message, "%15s %c %32s", cmd, &player_id, session_token);
+    int num_parsed = sscanf(message, "%c %c %32s", &cmd, &player_id, session_token);
 
     if (num_parsed < 3) {
         strcpy(response, "ERROR Missing session token");
@@ -495,8 +520,7 @@ void process_client_message(char* message, char* response) {
     }
 
     // Validate the command string (allowed commands: CONNECT, MOVE, ZAP, DISCONNECT)
-    if (strcmp(cmd, "CONNECT") != 0 && strcmp(cmd, "MOVE") != 0 &&
-        strcmp(cmd, "ZAP") != 0 && strcmp(cmd, "DISCONNECT") != 0) {
+    if (cmd != CMD_MOVE && cmd != MSG_ZAP && cmd != CMD_DISCONNECT) {
         strncpy(response, "ERROR Unknown command", BUFFER_SIZE - 1);
         response[BUFFER_SIZE - 1] = '\0';
         return;
@@ -540,10 +564,10 @@ void process_client_message(char* message, char* response) {
 
 
     // Command handling with checks
-    if (strcmp(cmd, "MOVE") == 0) {
+    if (cmd == CMD_MOVE) {
         time_t current_time = time(NULL);
-        char direction[10];
-        if (sscanf(message, "%*s %*c %*s %9s", direction) != 1) {
+        char direction;
+        if (sscanf(message, "%*s %*c %*s %c", &direction) != 1) {
             strcpy(response, "ERROR Invalid MOVE command format");
             return;
         }
@@ -554,23 +578,22 @@ void process_client_message(char* message, char* response) {
         }
 
         // Validate direction
-        if (strcmp(direction, "LEFT") != 0 && strcmp(direction, "RIGHT") != 0 &&
-            strcmp(direction, "UP") != 0 && strcmp(direction, "DOWN") != 0) {
+        if (direction != MOVE_UP && direction != MOVE_DOWN && direction != MOVE_LEFT && direction != MOVE_RIGHT) {
             strncpy(response, "ERROR Invalid direction", BUFFER_SIZE - 1);
             response[BUFFER_SIZE - 1] = '\0';
             return;
         }
 
         if (is_valid_move(player, direction)) {
-            if (strcmp(direction, "LEFT") == 0) player->x--;
-            else if (strcmp(direction, "RIGHT") == 0) player->x++;
-            else if (strcmp(direction, "UP") == 0) player->y--;
-            else if (strcmp(direction, "DOWN") == 0) player->y++;
+            if (direction ==MOVE_LEFT) player->x--;
+            else if (direction == MOVE_RIGHT) player->x++;
+            else if (direction == MOVE_UP) player->y--;
+            else if (direction == MOVE_DOWN) player->y++;
             snprintf(response, BUFFER_SIZE, "OK %d", player->score);
         } else {
             strcpy(response, "ERROR Invalid move");
         }
-    } else if (strcmp(cmd, "ZAP") == 0) {
+    } else if (cmd == MSG_ZAP)  {
         time_t current_time = time(NULL);
         if (difftime(current_time, player->last_fire_time) < LASER_COOLDOWN) {
             strcpy(response, "ERROR Laser cooldown");
@@ -587,26 +610,22 @@ void process_client_message(char* message, char* response) {
         }
 
         // Determine laser direction based on player's id
-        if (player->player_id == 'A' || player->player_id == 'H' || player->player_id == 'D' || player->player_id == 'F') {
-            strcpy(player->laser.direction, "HORIZONTAL");
-            if (player->player_id == 'A' || player->player_id == 'H') {
-                player->laser.x = player->x + 1; // Start right of player
-                player->laser.y = player->y;
-                //printf("Player %c fired a laser from %d, %d\n", player_id, player->laser.x, player->laser.y);
-            } else {
-                player->laser.x = player->x - 1;  // Start left of player
-                player->laser.y = player->y;
-            }
-        } else {
-            strcpy(player->laser.direction, "VERTICAL");
-            if (player->player_id == 'B' || player->player_id == 'C') {
-                player->laser.y = player->y - 1;
-                player->laser.x = player->x;
-            } else {
-                player->laser.y = player->y + 1;
-                player->laser.x = player->x;
-            }
+        if (player->zone == ZONE_A || player->zone == ZONE_H) {
+            player->laser.x = player->x + 1; // Start right of player
+            player->laser.y = player->y;
+            //printf("Player %c fired a laser from %d, %d\n", player_id, player->laser.x, player->laser.y);
+        } else if (player->zone == ZONE_D || player->zone == ZONE_F) {
+            player->laser.x = player->x - 1;  // Start left of player
+            player->laser.y = player->y;
+        } 
+        else if (player->zone == ZONE_B || player->zone == ZONE_C) {
+            player->laser.y = player->y - 1;
+            player->laser.x = player->x;
+        } else if (player->zone == ZONE_E || player->zone == ZONE_G) {
+            player->laser.y = player->y + 1;
+            player->laser.x = player->x;
         }
+        
 
         // Initialize laser position
         player->laser.active = 1;
@@ -626,7 +645,7 @@ void process_client_message(char* message, char* response) {
 
         //printf("Player %c fired a laser %s.\n", player_id, player->laser.direction);
         snprintf(response, BUFFER_SIZE, "OK %d", player->score);
-    } else if (strcmp(cmd, "DISCONNECT") == 0) {
+    } else if (cmd == CMD_DISCONNECT)  {
         clear_player(player);
         //printf("Player %c disconnected.\n", player->player_id);
         strcpy(response, "OK");
@@ -642,38 +661,39 @@ void check_laser_collisions() {
         if (players[i].laser.active) {
             Laser_t* laser = &players[i].laser;
             // Traverse the grid based on laser direction and player position
-            if (strcmp(laser->direction, "HORIZONTAL") == 0) {
+            if (players[i].zone == ZONE_A || players[i].zone == ZONE_H || players[i].zone == ZONE_D || players[i].zone == ZONE_F) {
+
                 // Check collision with alliens
                 for (int j = 0; j < MAX_ALIENS; j++) {
                     if (aliens[j].active && aliens[j].y == laser->y) {
-                        // Kill allien and update player score
+                        // Destroy allien and update player score
                         aliens[j].active = 0;
                         players[i].score += KILL_POINTS;
                     }
                 }
                 // Check colision with player
                 for (int j = 0; j < MAX_PLAYERS; j++) {
-                    if (players[j].player_id == players[i].player_id) continue;
-                    if (players[j].player_id == 'A' && players[i].player_id == 'H') continue; //Player is behind laser
-                    if (players[j].player_id == 'F' && players[i].player_id == 'D') continue; //Player is behind laser
+                    if (players[j].id == players[i].id) continue;
+                    if (players[j].zone == ZONE_A && players[i].zone == ZONE_H) continue; //Player is behind laser
+                    if (players[j].zone == ZONE_F && players[i].zone == ZONE_D) continue; //Player is behind laser
                     if (players[j].y == laser->y) {
                         players[j].last_stun_time = time(NULL);
                     }
                 }
-            } else if (strcmp(laser->direction, "VERTICAL") == 0) {
+            } else {
                 // Check collision with alliens
                 for (int j = 0; j < MAX_ALIENS; j++) {
                     if (aliens[j].active && aliens[j].x == laser->x) {
-                        // Kill allien and update player score
+                        // Destroy allien and update player score
                         aliens[j].active = 0;
                         players[i].score += KILL_POINTS;
                     }
                 }
                 // Check colision with player
                 for (int j = 0; j < MAX_PLAYERS; j++) {
-                    if (players[j].player_id == players[i].player_id) continue;
-                    if (players[j].player_id == 'E' && players[i].player_id == 'G') continue; //Player is behind laser
-                    if (players[j].player_id == 'C' && players[i].player_id == 'B') continue; //Player is behind laser
+                    if (players[j].id == players[i].id) continue;
+                    if (players[j].zone == ZONE_E && players[i].zone == ZONE_G) continue; //Player is behind laser
+                    if (players[j].zone == ZONE_C && players[i].zone == ZONE_B) continue; //Player is behind laser
                     if (players[j].x == laser->x) {
                         players[j].last_stun_time = time(NULL);
                     }
@@ -684,7 +704,7 @@ void check_laser_collisions() {
 }
 
 
-
+//TODO: CHECK IF OTHER ALLIEN IS IN NEW POSITION
 void update_alien_positions() {
     time_t current_time = time(NULL);
     
@@ -747,17 +767,27 @@ void update_game_state() {
 }
 
 void send_game_over_state() {
-    char message[BUFFER_SIZE] = "GAME_OVER\n";
+    char message[BUFFER_SIZE] = "";
     char temp[100];
 
-    // Include final scores of all players
+    // Include game over command
+    temp[0] = CMD_GAME_OVER;
+    temp[1] = '\n';
+    
+    //snprintf(temp, sizeof(temp), "%c\n", MSG_GAME_OVER);
+    strcat(message, temp);
+
+    // Send final scores of all players
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].player_id != '\0') {
-            snprintf(temp, sizeof(temp), "FINAL_SCORE %c %d\n",
-                     players[i].player_id, players[i].score);
+        if (players[i].id != '\0') {
+            snprintf(temp, sizeof(temp), "%c %c %d\n",
+                    CMD_SCORE,
+                    players[i].id,
+                    players[i].score);
             strcat(message, temp);
         }
     }
+    
 
     // Send the message
     zmq_send(publisher, message, strlen(message), 0);
@@ -782,9 +812,9 @@ void show_victory_screen() {
     int max_score = -1;
     char winner_id = '\0';
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].player_id != '\0' && players[i].score > max_score) {
+        if (players[i].id != '\0' && players[i].score > max_score) {
             max_score = players[i].score;
-            winner_id = players[i].player_id;
+            winner_id = players[i].id;
         }
     }
 
@@ -804,8 +834,8 @@ void show_victory_screen() {
     mvprintw(center_y, center_x - 7, "Final Scores:");
     int line = center_y + 1;
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].player_id != '\0') {
-            mvprintw(line++, center_x - 10, "Astronaut %c: %d", players[i].player_id, players[i].score);
+        if (players[i].id != '\0') {
+            mvprintw(line++, center_x - 10, "Astronaut %c: %d", players[i].id, players[i].score);
         }
     }
 
@@ -888,11 +918,10 @@ int main() {
         usleep(50000); // 50ms delay
     }
 
+    send_game_over_state();
 
     // Show game over screen
     show_victory_screen();
-    
-    send_game_over_state();
     
     zmq_close(responder);
     zmq_close(publisher);
