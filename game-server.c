@@ -60,6 +60,8 @@ Player players[MAX_PLAYERS];
 Laser lasers[MAX_PLAYERS]; // One laser per player
 Alien aliens[MAX_ALIENS];
 
+void update_game_state();
+
 void initialize_game_state() {
     // Initialize players
     srand(time(NULL));
@@ -591,6 +593,18 @@ void process_client_message(char* message, char* response) {
         lasers[laser_index].player_id = player_id;
         lasers[laser_index].creation_time = current_time;
 
+        // Update game state
+        update_game_state();
+
+        // Update the grid based on the current game state
+        update_grid();
+
+        // Draw the updated grid
+        draw_grid();
+
+        // Send updated state to display
+        send_game_state();
+
         //printf("Player %c fired a laser %s.\n", player_id, lasers[laser_index].direction);
         snprintf(response, BUFFER_SIZE, "OK %d", player->score);
     } else if (strcmp(cmd, "DISCONNECT") == 0) {
@@ -865,16 +879,17 @@ int main() {
         // Draw the updated grid
         draw_grid();
 
-        
         // Send updated state to display
         send_game_state();
         
         usleep(50000); // 50ms delay
     }
 
-    send_game_over_state();
+
     // Show game over screen
     show_victory_screen();
+    
+    send_game_over_state();
     
     zmq_close(responder);
     zmq_close(publisher);
