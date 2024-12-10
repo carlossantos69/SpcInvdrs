@@ -26,7 +26,7 @@ void* subscriber;
 
 // Player structure
 typedef struct {
-    char player_id;
+    char id;
     int score;
     int active;  // flag to track if we've seen this player
 } Player_t;
@@ -65,7 +65,7 @@ void initialize_display() {
 
     // Initialize player scores
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        players[i].player_id = '\0';
+        players[i].id = '\0';
         players[i].score = 0;
     }
 
@@ -126,7 +126,7 @@ void update_grid(char* update_message) {
                 // Update player status
                 int idx = id - 'A';
                 if (idx >= 0 && idx < MAX_PLAYERS) {
-                    players[idx].player_id = id;
+                    players[idx].id = id;
                     players[idx].active = 1;
                     //mvprintw(DEBUG_LINE, 0, "Player %c active at index %d", id, idx);
                 }
@@ -206,7 +206,7 @@ void draw_scores() {
         if (players[i].active) {  // Only show active players
             attron(COLOR_PAIR(COLOR_ASTRONAUT));
             mvprintw(5 + active_players, SCORE_START_X, "Astronaut %c: %d", 
-                    players[i].player_id, players[i].score);
+                    players[i].id, players[i].score);
             attroff(COLOR_PAIR(COLOR_ASTRONAUT));
             active_players++;
         }
@@ -303,7 +303,7 @@ void show_victory_screen() {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (players[i].active && players[i].score > max_score) {
             max_score = players[i].score;
-            winner_id = players[i].player_id;
+            winner_id = players[i].id;
         }
     }
 
@@ -328,7 +328,7 @@ void show_victory_screen() {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (players[i].active) {
             char score_msg[50];
-            snprintf(score_msg, sizeof(score_msg), "Astronaut %c: %d", players[i].player_id, players[i].score);
+            snprintf(score_msg, sizeof(score_msg), "Astronaut %c: %d", players[i].id, players[i].score);
             mvprintw(line++, center_x - (int)(strlen(score_msg) / 2), "%s", score_msg);
         }
     }
