@@ -24,13 +24,12 @@
 
 #define DEBUG_LINE (GRID_HEIGHT + 5)  // Line to show debug messages
 
-int game_over = 0;
+int game_over_display = 0;
 
 // ZeroMQ socket
-void* context;
 void* subscriber;
 
-disp_Player_t players[MAX_PLAYERS];  // Array to store players
+disp_Player_t players_disp[MAX_PLAYERS];  // Array to store players
 
 // Game state representation
 disp_Cell_t grid[GRID_HEIGHT][GRID_WIDTH];
@@ -60,8 +59,8 @@ void initialize_display() {
 
     // Initialize player scores
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        players[i].id = '\0';
-        players[i].score = 0;
+        players_disp[i].id = '\0';
+        players_disp[i].score = 0;
     }
 
     // Draw row numbers on the left
@@ -101,14 +100,14 @@ void update_grid(char* update_message) {
     }
 
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        players[i].active = 0;
+        players_disp[i].active = 0;
     }
 
      // Parse the message line by line
     char* line = strtok(update_message, "\n");
     while (line != NULL) {
         if (line[0] == CMD_GAME_OVER) {
-            game_over = 1; // Set a flag to indicate the game is over
+            game_over_display = 1; // Set a flag to indicate the game is over
 
 
         } else if (line[0] == CMD_PLAYER) {
@@ -121,8 +120,8 @@ void update_grid(char* update_message) {
                 // Update player status
                 int idx = id - 'A';
                 if (idx >= 0 && idx < MAX_PLAYERS) {
-                    players[idx].id = id;
-                    players[idx].active = 1;
+                    players_disp[idx].id = id;
+                    players_disp[idx].active = 1;
                     //mvprintw(DEBUG_LINE, 0, "Player %c active at index %d", id, idx);
                 }
             }
@@ -170,8 +169,8 @@ void update_grid(char* update_message) {
             
             int idx = id - 'A';
             if (idx >= 0 && idx < MAX_PLAYERS) {
-                players[idx].active = 1;
-                players[idx].score = player_score;
+                players_disp[idx].active = 1;
+                players_disp[idx].score = player_score;
                 //mvprintw(DEBUG_LINE, 40, "Score update: Player %c = %d", id, player_score);
             }
         }
@@ -198,10 +197,10 @@ void draw_scores() {
 
     // Display scores for all active players
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].active) {  // Only show active players
+        if (players_disp[i].active) {  // Only show active players
             attron(COLOR_PAIR(COLOR_ASTRONAUT));
             mvprintw(5 + active_players, SCORE_START_X, "Astronaut %c: %d", 
-                    players[i].id, players[i].score);
+                    players_disp[i].id, players_disp[i].score);
             attroff(COLOR_PAIR(COLOR_ASTRONAUT));
             active_players++;
         }
@@ -296,9 +295,9 @@ void show_victory_screen() {
     int max_score = -1;
     char winner_id = '\0';
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].active && players[i].score > max_score) {
-            max_score = players[i].score;
-            winner_id = players[i].id;
+        if (players_disp[i].active && players_disp[i].score > max_score) {
+            max_score = players_disp[i].score;
+            winner_id = players_disp[i].id;
         }
     }
 
@@ -321,9 +320,9 @@ void show_victory_screen() {
     mvprintw(center_y, center_x - 7, "Final Scores:");
     int line = center_y + 1;
     for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].active) {
+        if (players_disp[i].active) {
             char score_msg[50];
-            snprintf(score_msg, sizeof(score_msg), "Astronaut %c: %d", players[i].id, players[i].score);
+            snprintf(score_msg, sizeof(score_msg), "Astronaut %c: %d", players_disp[i].id, players_disp[i].score);
             mvprintw(line++, center_x - (int)(strlen(score_msg) / 2), "%s", score_msg);
         }
     }
@@ -347,7 +346,7 @@ void display_main(void* sub) {
     initialize_display();
 
     // Main loop
-    while (!game_over) {
+    while (!game_over_display) {
         char buffer[BUFFER_SIZE];
         int recv_size = zmq_recv(subscriber, buffer, sizeof(buffer) - 1, ZMQ_DONTWAIT);
         if (recv_size != -1) {
@@ -378,7 +377,7 @@ void display_main(void* sub) {
     }
 
     // Show victory screen if game_over flag is set
-    if (game_over) {
+    if (game_over_display) {
         show_victory_screen();
     } else {
         // If game_over is not set, inform the user

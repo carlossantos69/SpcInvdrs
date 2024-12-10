@@ -6,8 +6,8 @@ TARGETS = game-server astronaut-client outer-space-display
 
 all: $(TARGETS)
 
-game-server: game-server.c config.h
-	$(CC) $(CFLAGS) -o $@ game-server.c $(LDFLAGS)
+game-server: game-server.c game-server.c config.h game-logic.h space-display.h 
+	$(CC) $(CFLAGS) -o $@ game-server.c game-logic.c space-display.c $(LDFLAGS)
 
 astronaut-client: astronaut-client.c config.h
 	$(CC) $(CFLAGS) -o $@ astronaut-client.c $(LDFLAGS)
