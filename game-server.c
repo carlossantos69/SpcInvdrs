@@ -496,7 +496,7 @@ void process_client_message(char* message, char* response) {
                     generate_session_token(players[i].session_token);
                     players[i].zone = get_random_zone();
                     initialize_player_position(&players[i]);
-                    sprintf(response, "%c %c %s", RESP_OK, new_id, players[i].session_token);
+                    sprintf(response, "%d %c %s", RESP_OK, new_id, players[i].session_token);
                     //printf("New player %c initialized at (%d,%d) with session token %s\n",new_id, players[i].x, players[i].y, players[i].session_token);
 
                     send_game_state();
@@ -505,7 +505,7 @@ void process_client_message(char* message, char* response) {
             }
         }
         //ERROR Maximum number of players reached
-        sprintf(response, "%c", ERR_FULL);
+        sprintf(response, "%d", ERR_FULL);
         return;
     }
 
@@ -517,21 +517,21 @@ void process_client_message(char* message, char* response) {
 
     if (num_parsed < 3) {
         //ERROR Missing session token
-        sprintf(response, "%c", ERR_INVALID_TOKEN);
+        sprintf(response, "%d", ERR_INVALID_TOKEN);
         return;
     }
 
     // Validate the command string (allowed commands: CONNECT, MOVE, ZAP, DISCONNECT)
     if (cmd != CMD_MOVE && cmd != MSG_ZAP && cmd != CMD_DISCONNECT) {
         //ERROR Unknown command
-        sprintf(response, "%c", ERR_UNKNOWN_CMD);
+        sprintf(response, "%d", ERR_UNKNOWN_CMD);
         return;
     }
 
     // Validate player_id (should be between 'A' and 'H')
     if (player_id < 'A' || player_id > 'H') {
         //ERROR Invalid player ID
-        sprintf(response, "%c", ERR_INVALID_PLAYERID);
+        sprintf(response, "%d", ERR_INVALID_PLAYERID);
         return;
     }
 
@@ -539,7 +539,7 @@ void process_client_message(char* message, char* response) {
     for (int i = 0; i < 32; i++) {
         if (!isxdigit(session_token[i])) {
             //ERROR Invalid session token characters
-            sprintf(response, "%c", ERR_INVALID_TOKEN);
+            sprintf(response, "%d", ERR_INVALID_TOKEN);
             return;
         }
     }
@@ -547,7 +547,7 @@ void process_client_message(char* message, char* response) {
     // Validate session_token length (should be exactly 32 characters)
     if (strlen(session_token) != 32) {
         //ERROR Invalid session token length
-        sprintf(response, "%c", ERR_INVALID_TOKEN);
+        sprintf(response, "%d", ERR_INVALID_TOKEN);
         return;
     }
 
@@ -555,12 +555,12 @@ void process_client_message(char* message, char* response) {
     Player_t* player = find_by_id(player_id);
     if (!player) {
         //ERROR Invalid player ID
-        sprintf(response, "%c", ERR_INVALID_PLAYERID);
+        sprintf(response, "%d", ERR_INVALID_PLAYERID);
         return;
     } 
     if (strcmp(player->session_token, session_token) != 0) {
         //ERROR Invalid session token
-        sprintf(response, "%c", ERR_INVALID_TOKEN);
+        sprintf(response, "%d", ERR_INVALID_TOKEN);
         return;
     }
 
@@ -571,20 +571,20 @@ void process_client_message(char* message, char* response) {
         char direction;
         if (sscanf(message, "%*c %*c %*s %c", &direction) != 1) {
             //ERROR Invalid MOVE command format
-            sprintf(response, "%c", ERR_INVALID_MOVE);
+            sprintf(response, "%d", ERR_INVALID_MOVE);
             return;
         }
 
         if (difftime(current_time, player->last_stun_time) < STUN_DURATION) {
             //ERROR Player stunned
-            sprintf(response, "%c", ERR_STUNNED);
+            sprintf(response, "%d", ERR_STUNNED);
             return;
         }
 
         // Validate direction
         if (direction != MOVE_UP && direction != MOVE_DOWN && direction != MOVE_LEFT && direction != MOVE_RIGHT) {
             //ERROR Invalid direction
-            sprintf(response, "%c", ERR_INVALID_DIR);
+            sprintf(response, "%d", ERR_INVALID_DIR);
             return;
         }
 
@@ -593,28 +593,28 @@ void process_client_message(char* message, char* response) {
             else if (direction == MOVE_RIGHT) player->x++;
             else if (direction == MOVE_UP) player->y--;
             else if (direction == MOVE_DOWN) player->y++;
-            snprintf(response, BUFFER_SIZE, "%c %d", RESP_OK, player->score);
+            snprintf(response, BUFFER_SIZE, "%d %d", RESP_OK, player->score);
         } else {
             //ERROR Invalid move direction
-            sprintf(response, "%c", ERR_INVALID_MOVE);
+            sprintf(response, "%d", ERR_INVALID_MOVE);
             return;
         }
     } else if (cmd == MSG_ZAP)  {
         time_t current_time = time(NULL);
         if (difftime(current_time, player->last_fire_time) < LASER_COOLDOWN) {
             //ERROR Laser cooldown
-            sprintf(response, "%c", ERR_LASER_COOLDOWN);
+            sprintf(response, "%d", ERR_LASER_COOLDOWN);
             return;
         }
         if (difftime(current_time, player->last_stun_time) < STUN_DURATION) {
             //ERROR Player stunned
-            sprintf(response, "%c", ERR_STUNNED);
+            sprintf(response, "%d", ERR_STUNNED);
             return;
         }
         player->last_fire_time = current_time;
         if (player->laser.active) {
             //ERROR Laser already active // ? IS IT EVER REACHED? BECAUSE LASER WOULD BE IN COOLDOWN
-            sprintf(response, "%c", ERR_LASER_COOLDOWN);
+            sprintf(response, "%d", ERR_LASER_COOLDOWN);
             return;
         }
 
@@ -653,7 +653,7 @@ void process_client_message(char* message, char* response) {
         send_game_state();
 
         
-        snprintf(response, BUFFER_SIZE, "%c %d", RESP_OK, player->score);
+        snprintf(response, BUFFER_SIZE, "%d %d", RESP_OK, player->score);
     } else if (cmd == CMD_DISCONNECT)  {
         clear_player(player);
         //printf("Player %c disconnected.\n", player->player_id);
@@ -799,9 +799,6 @@ void send_game_over_state() {
 
     // Send the message
     zmq_send(publisher, message, strlen(message), 0);
-
-    // Give the display client time to process the message before terminating
-    sleep(1);
 }
 
 void show_victory_screen() {

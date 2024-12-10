@@ -61,24 +61,24 @@
 
 // Command responses and error Codes
 // Chars for easer code parse in clients
-#define RESP_OK '0'
-#define ERR_UNKNOWN_CMD '1'
+#define RESP_OK 0
+#define ERR_UNKNOWN_CMD -1
 #define ERR_UNKNOWN_CMD_MSG "Unknown command"
-#define ERR_TOLONG '2'
+#define ERR_TOLONG -2
 #define ERR_TOLONG_MSG "Message too long"
-#define ERR_FULL '3'
+#define ERR_FULL -3
 #define ERR_FULL_MSG "Maximum number of players reached"
-#define ERR_INVALID_TOKEN '4'
+#define ERR_INVALID_TOKEN -4
 #define ERR_INVALID_TOKEN_MSG "Invalid session token"
-#define ERR_INVALID_PLAYERID '5'
+#define ERR_INVALID_PLAYERID -5
 #define ERR_INVALID_PLAYERID_MSG "Invalid session id"
-#define ERR_STUNNED '6'
+#define ERR_STUNNED -6
 #define ERR_STUNNED_MSG "Player stunned"
-#define ERR_INVALID_MOVE '7'
+#define ERR_INVALID_MOVE -7
 #define ERR_INVALID_MOVE_MSG "Invalid move command"
-#define ERR_INVALID_DIR '8'
+#define ERR_INVALID_DIR -8
 #define ERR_INVALID_DIR_MSG "Invalid dirrection"
-#define ERR_LASER_COOLDOWN '9'
+#define ERR_LASER_COOLDOWN -9
 #define ERR_LASER_COOLDOWN_MSG "Laser cooldown"
 
 #endif // SPCINVDRS_CONFIG

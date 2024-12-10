@@ -17,7 +17,7 @@ char player_id = '\0';
 int player_score = 0;
 char session_token[33]; // To store the session token received from the server
 
-void find_error(char code, char *msg) {
+void find_error(int code, char *msg) {
     strcpy(msg, "Error: ");
     switch (code) {
         case ERR_UNKNOWN_CMD: // Move up
@@ -60,17 +60,17 @@ void send_connect_message() {
 
     // Receive response from server
     char buffer[BUFFER_SIZE];
-    char status = '\0';
+    int response = ERR_UNKNOWN_CMD;
     int recv_size = zmq_recv(requester, buffer, sizeof(buffer) - 1, 0);
     if (recv_size != -1) {
         buffer[recv_size] = '\0';
         
-        if (sscanf(buffer, "%c %c %32s", &status, &player_id, session_token) == 3) {
+        if (sscanf(buffer, "%d %c %32s", &response, &player_id, session_token) == 3) {
 
             // Check is status is error
-            if (status != RESP_OK) {
+            if (response != RESP_OK) {
                 char error_msg[BUFFER_SIZE];
-                find_error(status, error_msg);
+                find_error(response, error_msg);
                 // Clear screen and display error
                 clear();
                 mvprintw(LINES/2, (COLS-strlen(buffer))/2, "%s", buffer);
@@ -152,12 +152,12 @@ void handle_key_input() {
         buffer[recv_size] = '\0';
         
         // Parse response to get status and score
-        char status;
+        int response;
         int new_score;
-        if (sscanf(buffer, "%c %d", &status, &new_score) >= 1) {
-            if (status != RESP_OK) {
+        if (sscanf(buffer, "%d %d", &response, &new_score) >= 1) {
+            if (response != RESP_OK) {
                 char error_msg[BUFFER_SIZE];
-                find_error(status, error_msg);
+                find_error(response, error_msg);
                 mvprintw(1, 0, "Last action failed. %s", error_msg);
                 refresh();
                 return;
