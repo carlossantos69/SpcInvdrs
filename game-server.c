@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #include <zmq.h>
 #include "config.h"
 #include "game-logic.h"
@@ -67,8 +68,7 @@ int main() {
         zmq_ctx_destroy(cont);
         zmq_ctx_term(cont);
 
-        return 0;
-
-
+        // Wait for child process to finish
+        wait(NULL);
     }
 }
