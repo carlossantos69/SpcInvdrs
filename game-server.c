@@ -496,7 +496,7 @@ void process_client_message(char* message, char* response) {
                     generate_session_token(players[i].session_token);
                     players[i].zone = get_random_zone();
                     initialize_player_position(&players[i]);
-                    sprintf(response, "%c %s", new_id, players[i].session_token);
+                    sprintf(response, "%c %c %s", RESP_OK, new_id, players[i].session_token);
                     //printf("New player %c initialized at (%d,%d) with session token %s\n",new_id, players[i].x, players[i].y, players[i].session_token);
 
                     send_game_state();
@@ -504,7 +504,8 @@ void process_client_message(char* message, char* response) {
                 }
             }
         }
-        strcpy(response, "FULL Maximum number of players (8) reached");
+        //ERROR Maximum number of players reached
+        sprintf(response, "%c", ERR_FULL);
         return;
     }
 
@@ -515,50 +516,51 @@ void process_client_message(char* message, char* response) {
     int num_parsed = sscanf(message, "%c %c %32s", &cmd, &player_id, session_token);
 
     if (num_parsed < 3) {
-        strcpy(response, "ERROR Missing session token");
+        //ERROR Missing session token
+        sprintf(response, "%c", ERR_INVALID_TOKEN);
         return;
     }
 
     // Validate the command string (allowed commands: CONNECT, MOVE, ZAP, DISCONNECT)
     if (cmd != CMD_MOVE && cmd != MSG_ZAP && cmd != CMD_DISCONNECT) {
-        strncpy(response, "ERROR Unknown command", BUFFER_SIZE - 1);
-        response[BUFFER_SIZE - 1] = '\0';
+        //ERROR Unknown command
+        sprintf(response, "%c", ERR_UNKNOWN_CMD);
         return;
     }
 
     // Validate player_id (should be between 'A' and 'H')
     if (player_id < 'A' || player_id > 'H') {
-        strncpy(response, "ERROR Invalid player ID", BUFFER_SIZE - 1);
-        response[BUFFER_SIZE - 1] = '\0';
+        //ERROR Invalid player ID
+        sprintf(response, "%c", ERR_INVALID_PLAYERID);
         return;
     }
 
     // Validate session token characters (should be hexadecimal)
     for (int i = 0; i < 32; i++) {
         if (!isxdigit(session_token[i])) {
-            strncpy(response, "ERROR Invalid session token characters", BUFFER_SIZE - 1);
-            response[BUFFER_SIZE - 1] = '\0';
+            //ERROR Invalid session token characters
+            sprintf(response, "%c", ERR_INVALID_TOKEN);
             return;
         }
     }
 
     // Validate session_token length (should be exactly 32 characters)
     if (strlen(session_token) != 32) {
-        strncpy(response, "ERROR Invalid session token length", BUFFER_SIZE - 1);
-        response[BUFFER_SIZE - 1] = '\0';
+        //ERROR Invalid session token length
+        sprintf(response, "%c", ERR_INVALID_TOKEN);
         return;
     }
 
     // Find the player based on the provided player ID and session token
     Player_t* player = find_by_id(player_id);
     if (!player) {
-        strncpy(response, "ERROR Invalid player ID or session token", BUFFER_SIZE - 1);
-        response[BUFFER_SIZE - 1] = '\0';
+        //ERROR Invalid player ID
+        sprintf(response, "%c", ERR_INVALID_PLAYERID);
         return;
     } 
     if (strcmp(player->session_token, session_token) != 0) {
-        strncpy(response, "ERROR Invalid player ID or session token", BUFFER_SIZE - 1);
-        response[BUFFER_SIZE - 1] = '\0';
+        //ERROR Invalid session token
+        sprintf(response, "%c", ERR_INVALID_TOKEN);
         return;
     }
 
@@ -567,20 +569,22 @@ void process_client_message(char* message, char* response) {
     if (cmd == CMD_MOVE) {
         time_t current_time = time(NULL);
         char direction;
-        if (sscanf(message, "%*s %*c %*s %c", &direction) != 1) {
-            strcpy(response, "ERROR Invalid MOVE command format");
+        if (sscanf(message, "%*c %*c %*s %c", &direction) != 1) {
+            //ERROR Invalid MOVE command format
+            sprintf(response, "%c", ERR_INVALID_MOVE);
             return;
         }
 
         if (difftime(current_time, player->last_stun_time) < STUN_DURATION) {
-            strcpy(response, "ERROR Player stunned");
+            //ERROR Player stunned
+            sprintf(response, "%c", ERR_STUNNED);
             return;
         }
 
         // Validate direction
         if (direction != MOVE_UP && direction != MOVE_DOWN && direction != MOVE_LEFT && direction != MOVE_RIGHT) {
-            strncpy(response, "ERROR Invalid direction", BUFFER_SIZE - 1);
-            response[BUFFER_SIZE - 1] = '\0';
+            //ERROR Invalid direction
+            sprintf(response, "%c", ERR_INVALID_DIR);
             return;
         }
 
@@ -589,23 +593,28 @@ void process_client_message(char* message, char* response) {
             else if (direction == MOVE_RIGHT) player->x++;
             else if (direction == MOVE_UP) player->y--;
             else if (direction == MOVE_DOWN) player->y++;
-            snprintf(response, BUFFER_SIZE, "OK %d", player->score);
+            snprintf(response, BUFFER_SIZE, "%c %d", RESP_OK, player->score);
         } else {
-            strcpy(response, "ERROR Invalid move");
+            //ERROR Invalid move direction
+            sprintf(response, "%c", ERR_INVALID_MOVE);
+            return;
         }
     } else if (cmd == MSG_ZAP)  {
         time_t current_time = time(NULL);
         if (difftime(current_time, player->last_fire_time) < LASER_COOLDOWN) {
-            strcpy(response, "ERROR Laser cooldown");
+            //ERROR Laser cooldown
+            sprintf(response, "%c", ERR_LASER_COOLDOWN);
             return;
         }
         if (difftime(current_time, player->last_stun_time) < STUN_DURATION) {
-            strcpy(response, "ERROR Player stunned");
+            //ERROR Player stunned
+            sprintf(response, "%c", ERR_STUNNED);
             return;
         }
         player->last_fire_time = current_time;
         if (player->laser.active) {
-            strcpy(response, "ERROR Laser already active");
+            //ERROR Laser already active // ? IS IT EVER REACHED? BECAUSE LASER WOULD BE IN COOLDOWN
+            sprintf(response, "%c", ERR_LASER_COOLDOWN);
             return;
         }
 
@@ -643,14 +652,15 @@ void process_client_message(char* message, char* response) {
         // Send updated state to display
         send_game_state();
 
-        //printf("Player %c fired a laser %s.\n", player_id, player->laser.direction);
-        snprintf(response, BUFFER_SIZE, "OK %d", player->score);
+        
+        snprintf(response, BUFFER_SIZE, "%c %d", RESP_OK, player->score);
     } else if (cmd == CMD_DISCONNECT)  {
         clear_player(player);
         //printf("Player %c disconnected.\n", player->player_id);
-        strcpy(response, "OK");
+        sprintf(response, "%c", RESP_OK);
     } else {
-        strcpy(response, "ERROR Unknown command");
+        //ERROR Unknown command
+        sprintf(response, "%c", ERR_UNKNOWN_CMD);
     }
 }
 
@@ -773,8 +783,6 @@ void send_game_over_state() {
     // Include game over command
     temp[0] = CMD_GAME_OVER;
     temp[1] = '\n';
-    
-    //snprintf(temp, sizeof(temp), "%c\n", MSG_GAME_OVER);
     strcat(message, temp);
 
     // Send final scores of all players
@@ -899,8 +907,9 @@ int main() {
             zmq_send(responder, response, strlen(response), 0);
         } else if (recv_size >= BUFFER_SIZE) {
             // Message too long, possible overflow attempt
-            char response[] = "ERROR Message too long";
-            zmq_send(responder, response, strlen(response), 0);
+            //char response[] = "ERROR Message too long";
+            char response = ERR_TOLONG;
+            zmq_send(responder, &response, sizeof(response), 0);
         }
         
         // Update game state

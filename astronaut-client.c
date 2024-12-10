@@ -14,54 +14,88 @@ void* requester;
 
 // Player state
 char player_id = '\0';
-int score = 0;
+int player_score = 0;
 char session_token[33]; // To store the session token received from the server
 
+void find_error(char code, char *msg) {
+    strcpy(msg, "Error: ");
+    switch (code) {
+        case ERR_UNKNOWN_CMD: // Move up
+            strcat(msg, ERR_UNKNOWN_CMD_MSG);
+            break;
+        case ERR_TOLONG: // Move down
+            strcat(msg, ERR_TOLONG_MSG);
+            break;
+        case ERR_FULL: // Move left
+            strcat(msg, ERR_FULL_MSG);
+            break;
+        case ERR_INVALID_TOKEN: // Move right
+            strcat(msg, ERR_INVALID_TOKEN_MSG);
+            break;
+        case ERR_INVALID_PLAYERID: // Move right
+            strcat(msg, ERR_INVALID_PLAYERID_MSG);
+            break;
+        case ERR_STUNNED: // Move right
+            strcat(msg, ERR_STUNNED_MSG);
+            break;
+        case ERR_INVALID_MOVE: // Move right
+            strcat(msg, ERR_INVALID_MOVE_MSG);
+            break;
+        case ERR_INVALID_DIR: // Move right
+            strcat(msg, ERR_INVALID_DIR_MSG);
+            break;
+        case ERR_LASER_COOLDOWN: // Move right
+            strcat(msg, ERR_LASER_COOLDOWN_MSG);
+            break;
+        default:
+            strcat(msg, "Unknown error");
+    }
+}
+
 void send_connect_message() {
-    char buffer[BUFFER_SIZE];
-    snprintf(buffer, sizeof(buffer), "CONNECT");
-    zmq_send(requester, buffer, strlen(buffer), 0);
+    char msg[2];
+    msg[0] = CMD_CONNECT;
+    msg[1] = '\n';
+    zmq_send(requester, msg, strlen(msg), 0);
 
     // Receive response from server
+    char buffer[BUFFER_SIZE];
+    char status = '\0';
     int recv_size = zmq_recv(requester, buffer, sizeof(buffer) - 1, 0);
     if (recv_size != -1) {
         buffer[recv_size] = '\0';
         
-        // Check if the response indicates server is full
-        if (strncmp(buffer, "FULL", 4) == 0) {
-            // Clear screen and display error
-            clear();
-            mvprintw(LINES/2, (COLS-strlen(buffer))/2, "%s", buffer);
-            mvprintw(LINES/2 + 1, (COLS-35)/2, "Press any key to exit");
-            refresh();
-            
-            // Wait for keypress before exiting
-            nodelay(stdscr, FALSE);  // Make getch() blocking
-            getch();
-            
-            // Clean up and exit gracefully
-            endwin();
-            zmq_close(requester);
-            zmq_ctx_destroy(context);
-            exit(0);
-        }else{
-            // Parse player ID and session token
-            if (sscanf(buffer, "%c %32s", &player_id, session_token) != 2) {
-                // Handle parsing error
-                strcpy(session_token, "");
-            }
+        if (sscanf(buffer, "%c %c %32s", &status, &player_id, session_token) == 3) {
+
+            // Check is status is error
+            if (status != RESP_OK) {
+                char error_msg[BUFFER_SIZE];
+                find_error(status, error_msg);
+                // Clear screen and display error
+                clear();
+                mvprintw(LINES/2, (COLS-strlen(buffer))/2, "%s", buffer);
+                mvprintw(LINES/2 + 1, (COLS-35)/2, "%s", error_msg);
+                refresh();
+                
+                // Wait for keypress before exiting
+                nodelay(stdscr, FALSE);  // Make getch() blocking
+                getch();
+                
+                // Clean up and exit gracefully
+                endwin();
+                zmq_close(requester);
+                zmq_ctx_destroy(context);
+                exit(0);
+            } 
+
             // Initialize display with player ID and session token
             move(0, 0);
             clrtoeol();
             mvprintw(0, 0, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", 
-                     player_id, score);
+                    player_id, player_score);
             refresh();
-        }
         
-        // Normal connection success handling
-        sscanf(buffer, "%c", &player_id);
-        mvprintw(0, 0, "Playing as Astronaut %c", player_id);
-        refresh();
+        }
     } else {
         perror("Failed to receive player ID");
         endwin();
@@ -71,14 +105,6 @@ void send_connect_message() {
     }
 }
 
-void update_score(int new_score) {
-    score = new_score;
-    // Update score display
-    mvprintw(0, 0, "Score: %d", score);
-    clrtoeol();
-    refresh();
-}
-
 void handle_key_input() {
     int ch = getch();
     if (ch == ERR) return; // No key pressed
@@ -86,19 +112,19 @@ void handle_key_input() {
     char buffer[BUFFER_SIZE];
     switch (ch) {
         case KEY_UP:
-            snprintf(buffer, sizeof(buffer), "%c %c %s UP", CMD_MOVE, player_id, session_token);
+            snprintf(buffer, sizeof(buffer), "%c %c %s %c", CMD_MOVE, player_id, session_token, MOVE_UP);
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case KEY_DOWN:
-            snprintf(buffer, sizeof(buffer), "%c %c %s DOWN", CMD_MOVE, player_id, session_token);
+            snprintf(buffer, sizeof(buffer), "%c %c %s %c", CMD_MOVE, player_id, session_token, MOVE_DOWN);
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case KEY_LEFT:
-            snprintf(buffer, sizeof(buffer), "%c %c %s LEFT", CMD_MOVE, player_id, session_token);
+            snprintf(buffer, sizeof(buffer), "%c %c %s %c", CMD_MOVE, player_id, session_token, MOVE_LEFT);
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case KEY_RIGHT:
-            snprintf(buffer, sizeof(buffer), "%c %c %s RIGHT", CMD_MOVE, player_id, session_token);
+            snprintf(buffer, sizeof(buffer), "%c %c %s %c", CMD_MOVE, player_id, session_token, MOVE_RIGHT);
             zmq_send(requester, buffer, strlen(buffer), 0);
             break;
         case ' ':
@@ -126,22 +152,22 @@ void handle_key_input() {
         buffer[recv_size] = '\0';
         
         // Parse response to get status and score
-        char status[32];
+        char status;
         int new_score;
-        if (sscanf(buffer, "%31s %d", status, &new_score) >= 1) {
-            // Update score if provided
-            if (sscanf(buffer, "%*s %d", &new_score) == 1) {
-                score = new_score;
+        if (sscanf(buffer, "%c %d", &status, &new_score) >= 1) {
+            if (status != RESP_OK) {
+                char error_msg[BUFFER_SIZE];
+                find_error(status, error_msg);
+                mvprintw(1, 0, "Last action failed. %s", error_msg);
+                refresh();
+                return;
             }
 
             // Update display
             move(0, 0);
             clrtoeol();
             mvprintw(0, 0, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", 
-                     player_id, score);
-            if (strcmp(status, "ERROR") == 0) {
-                mvprintw(1, 0, "Last action failed: %s", buffer);
-            }
+                     player_id, player_score);
             refresh();
         }
     } else {
