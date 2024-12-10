@@ -42,9 +42,9 @@ int main() {
         zmq_close(disp_sub);
         zmq_ctx_destroy(cont);
         zmq_ctx_term(cont);
-        return 0;
+        exit(0);
 
-    } else {
+    } else if (pid > 0) {
         // Parent process, game logic
 
         // Initialize ZeroMQ context
@@ -70,5 +70,11 @@ int main() {
 
         // Wait for child process to finish
         wait(NULL);
+    } else {
+        // Fork failed
+        perror("Failed to fork");
+        exit(EXIT_FAILURE);
     }
+
+    return 0;
 }
