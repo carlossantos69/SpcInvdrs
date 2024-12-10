@@ -2,7 +2,6 @@
 #include "config.h"
 #include <stdio.h>
 
-void* context;
 void* responder;  // For REQ/REP with astronauts
 void* publisher;  // For PUB/SUB with display
 
@@ -584,13 +583,6 @@ void send_game_over_state() {
     zmq_send(publisher, message, strlen(message), 0);
 }
 
-void cleanup() {
-    // Close ZeroMQ sockets if necessary
-    zmq_close(responder);
-    zmq_close(publisher);
-    zmq_ctx_destroy(context);
-}
-
 void game_logic(void* resp, void* pub) {
     initialize_game_state();
     printf("Game logic started\n");
@@ -626,10 +618,4 @@ void game_logic(void* resp, void* pub) {
     }
 
     send_game_over_state();
-
-    zmq_close(responder);
-    zmq_close(publisher);
-    zmq_ctx_destroy(context);   // Shutdown context
-    zmq_ctx_term(context);     // Terminate context
-    cleanup();
 }

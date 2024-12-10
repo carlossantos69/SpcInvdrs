@@ -8,19 +8,10 @@
 #include "config.h"
 #include "space-display.h"
 
-// ZeroMQ socket
-void* cont;
-void* disp_sub;
-
-void cleanup(void) {
-    zmq_close(disp_sub);
-    zmq_ctx_destroy(cont);
-}
-
 int main() {
-    // Initialize ZeroMQ
-    cont = zmq_ctx_new();
-    disp_sub = zmq_socket(cont, ZMQ_SUB);
+    // Initialize ZeroMQ sockets
+    void* cont = zmq_ctx_new();
+    void* disp_sub = zmq_socket(cont, ZMQ_SUB);
 
     // Connect to server's PUB socket
     if (zmq_connect(disp_sub, CLIENT_CONNECT_SUB) != 0) {
@@ -31,9 +22,12 @@ int main() {
     // Subscribe to all messages
     zmq_setsockopt(disp_sub, ZMQ_SUBSCRIBE, "", 0);
 
+    // Start the display
     display_main(disp_sub);
 
-    // Clean up
-    cleanup();
+    // Close ZeroMQ sockets
+    zmq_close(disp_sub);
+    zmq_ctx_destroy(cont);
+    zmq_ctx_term(cont);
     return 0;
 }
