@@ -4,37 +4,34 @@
 
 #include <zmq.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include "config.h"
-#include <time.h>
 #include "space-display.h"
 
 // ZeroMQ socket
 void* cont;
-void* sub;
+void* disp_sub;
 
 void cleanup(void) {
-    zmq_close(sub);
+    zmq_close(disp_sub);
     zmq_ctx_destroy(cont);
 }
 
 int main() {
     // Initialize ZeroMQ
     cont = zmq_ctx_new();
-    sub = zmq_socket(cont, ZMQ_SUB);
+    disp_sub = zmq_socket(cont, ZMQ_SUB);
 
     // Connect to server's PUB socket
-    if (zmq_connect(sub, CLIENT_CONNECT_SUB) != 0) {
+    if (zmq_connect(disp_sub, CLIENT_CONNECT_SUB) != 0) {
         perror("Failed to connect to game server");
         return 1;
     }
 
     // Subscribe to all messages
-    zmq_setsockopt(sub, ZMQ_SUBSCRIBE, "", 0);
+    zmq_setsockopt(disp_sub, ZMQ_SUBSCRIBE, "", 0);
 
-    display_main(cont, sub);
+    display_main(disp_sub);
 
     // Clean up
     cleanup();

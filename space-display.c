@@ -8,10 +8,12 @@
 
 // This file need to include config.h to have acess to the config aswell
 #include <ncurses.h>
+#include <unistd.h>
 #include <zmq.h>
 #include "config.h"
 #include "space-display.h"
 #include <time.h>
+#include <string.h>
 
 #define GRID_WIDTH 20
 #define GRID_HEIGHT 20
@@ -28,22 +30,10 @@ int game_over = 0;
 void* context;
 void* subscriber;
 
-// Player structure
-typedef struct {
-    char id;
-    int score;
-    int active;  // flag to track if we've seen this player
-} Player_t;
-
-typedef struct {
-    char ch;
-    time_t laser_time; // Timestamp when the laser was drawn
-} Cell_t;
-
-Player_t players[MAX_PLAYERS];  // Array to store players
+disp_Player_t players[MAX_PLAYERS];  // Array to store players
 
 // Game state representation
-Cell_t grid[GRID_HEIGHT][GRID_WIDTH];
+disp_Cell_t grid[GRID_HEIGHT][GRID_WIDTH];
 
 
 void initialize_display() {
@@ -350,8 +340,7 @@ void show_victory_screen() {
     getch();
 }
 
-void display_main(void* cont, void* sub) {
-    context = cont;
+void display_main(void* sub) {
     subscriber = sub;
 
     // Initialize the display

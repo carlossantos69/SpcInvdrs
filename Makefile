@@ -2,18 +2,18 @@ CC = gcc
 CFLAGS = -Wall -Wextra -g
 LDFLAGS = -lncurses -lzmq
 
-TARGETS = game-server astronaut-client outer-space-display
+TARGETS = game-server astronaut-client outer-space-display 
 
 all: $(TARGETS)
 
 game-server: game-server.c config.h
-	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ game-server.c $(LDFLAGS)
 
 astronaut-client: astronaut-client.c config.h
-	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ astronaut-client.c $(LDFLAGS)
 
-outer-space-display: outer-space-display.c config.h
-	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+outer-space-display: outer-space-display.c space-display.c config.h space-display.h
+	$(CC) $(CFLAGS) -o $@ outer-space-display.c space-display.c $(LDFLAGS)
 
 clean:
 	rm -f $(TARGETS)
