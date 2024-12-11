@@ -1,24 +1,40 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -g
+CFLAGS = -Wall -Wextra -Icommon-files
 LDFLAGS = -lncurses -lzmq
 
-TARGETS = game-server astronaut-client outer-space-display 
+# Directories
+ASTRONAUT_CLIENT_DIR = Astronaut-clt
+GAME_SERVER_DIR = Game-Server-clt
+OUTER_SPACE_DISPLAY_DIR = Outer-Space-Display-clt
+COMMON_FILES_DIR = common-files
 
-all: $(TARGETS)
+# Source files
+ASTRONAUT_CLIENT_SRCS = $(ASTRONAUT_CLIENT_DIR)/astronaut-client.c
+GAME_SERVER_SRCS = $(GAME_SERVER_DIR)/game-server.c
+OUTER_SPACE_DISPLAY_SRCS = $(OUTER_SPACE_DISPLAY_DIR)/outer-space-display.c
+COMMON_SRCS = $(COMMON_FILES_DIR)/game-logic.c $(COMMON_FILES_DIR)/space-display.c
 
-game-server: game-server.c game-server.c config.h game-logic.h space-display.h 
-	$(CC) $(CFLAGS) -o $@ game-server.c game-logic.c space-display.c $(LDFLAGS)
+# Object files
+ASTRONAUT_CLIENT_OBJS = $(ASTRONAUT_CLIENT_SRCS:.c=.o)
+GAME_SERVER_OBJS = $(GAME_SERVER_SRCS:.c=.o)
+OUTER_SPACE_DISPLAY_OBJS = $(OUTER_SPACE_DISPLAY_SRCS:.c=.o)
+COMMON_OBJS = $(COMMON_SRCS:.c=.o)
 
-astronaut-client: astronaut-client.c config.h
-	$(CC) $(CFLAGS) -o $@ astronaut-client.c $(LDFLAGS)
+# Targets
+all: astronaut-client game-server outer-space-display
 
-outer-space-display: outer-space-display.c space-display.c config.h space-display.h
-	$(CC) $(CFLAGS) -o $@ outer-space-display.c space-display.c $(LDFLAGS)
+astronaut-client: $(ASTRONAUT_CLIENT_OBJS) $(COMMON_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+game-server: $(GAME_SERVER_OBJS) $(COMMON_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+outer-space-display: $(OUTER_SPACE_DISPLAY_OBJS) $(COMMON_OBJS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -f $(TARGETS)
+	rm -f $(ASTRONAUT_CLIENT_OBJS) $(GAME_SERVER_OBJS) $(OUTER_SPACE_DISPLAY_OBJS) $(COMMON_OBJS) astronaut-client game-server outer-space-display
 
-# Phony targets
 .PHONY: all clean
 
 # Installation and dependencies

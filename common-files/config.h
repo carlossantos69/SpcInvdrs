@@ -1,3 +1,10 @@
+/*
+ * File: space-display.c
+ * Author: Carlos Santos e Tomás Corral
+ * Description: This is the config file used by the clients.
+ * Date: 11/12/2024
+ */
+
 #ifndef SPCINVDRS_CONFIG_H
 #define SPCINVDRS_CONFIG_H
 

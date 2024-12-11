@@ -1,10 +1,9 @@
-// This file is suposed to have all the code for the display
-
-
-// game-server.c launches a process that runs this code
-// outer-space-display.c runs this code (only one process maybe)
-
-// game-server.c and outer-space-display.c need to include this
+/*
+ * File: space-display.c
+ * Author: Carlos Santos e Tomás Corral
+ * Description: This is the header file for the space display program.
+ * Date: 11/12/2024
+ */
 
 #ifndef SPACE_DISPLAY_H
 #define SPACE_DISPLAY_H

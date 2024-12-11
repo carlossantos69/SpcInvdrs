@@ -1,3 +1,10 @@
+/*
+ * File: space-display.c
+ * Author: Carlos Santos e Tomás Corral
+ * Description: This is the header file for the game logic program.
+ * Date: 11/12/2024
+ */
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
