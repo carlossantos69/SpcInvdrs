@@ -545,9 +545,9 @@ void update_game_state() {
     // Check laser collisions and update scores
     check_laser_collisions();
     
-    // Deactivate lasers after 0.5 seconds
+    // Deactivate lasers after LASER_DURATION seconds
     for (int i = 0; i < MAX_PLAYERS; ++i) {
-        if (players[i].laser.active && difftime(current_time, players[i].laser.creation_time) >= 0.5) {
+        if (players[i].laser.active && difftime(current_time, players[i].laser.creation_time) >= LASER_DURATION) {
             players[i].laser.active = 0;
         }
     }

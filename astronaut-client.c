@@ -93,6 +93,8 @@ void send_connect_message() {
             clrtoeol();
             mvprintw(0, 0, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", 
                     player_id, player_score);
+            move(2, 0);
+            clrtoeol(); 
             refresh();
         
         }
@@ -158,16 +160,20 @@ void handle_key_input() {
             if (response != RESP_OK) {
                 char error_msg[BUFFER_SIZE];
                 find_error(response, error_msg);
-                mvprintw(1, 0, "Last action failed. %s", error_msg);
+                mvprintw(2, 0, "Last action failed. %s", error_msg);
                 refresh();
                 return;
             }
+            player_score = new_score;
 
             // Update display
             move(0, 0);
             clrtoeol();
             mvprintw(0, 0, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", 
                      player_id, player_score);
+            // Clear error line
+            move(2, 0);
+            clrtoeol();   
             refresh();
         }
     } else {

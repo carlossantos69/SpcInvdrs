@@ -18,8 +18,9 @@
 #define GRID_WIDTH 20
 #define GRID_HEIGHT 20
 #define MAX_PLAYERS 8
-#define MAX_ALIENS 6  // 1/3 of grid area
+#define MAX_ALIENS 80  // 1/3 of grid area?
 #define BUFFER_SIZE 2048
+#define LASER_DURATION 0.5
 
 // UI Positions
 // TODO: START USING THESE
