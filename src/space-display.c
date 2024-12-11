@@ -7,6 +7,8 @@
  * - Carlos Santos - 102985 - carlos.r.santos@tecnico.ulisboa.pt
  * - Tomas Corral  - 102446 - tomas.corral@tecnico.ulisboa.pt
  *
+ * Group ID: 20
+ *
  * Description:
  * Logic for the UI and screen using ncurses. All the UI code is here
  */

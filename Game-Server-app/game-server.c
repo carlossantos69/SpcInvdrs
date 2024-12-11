@@ -7,6 +7,8 @@
  * - Carlos Santos - 102985 - carlos.r.santos@tecnico.ulisboa.pt
  * - Tomas Corral  - 102446 - tomas.corral@tecnico.ulisboa.pt
  *
+ * Group ID: 20
+ * 
  * Description:
  * Code that handles game server application. Calls game.logic.c and space-display.c
  */

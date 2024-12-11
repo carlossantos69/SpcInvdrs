@@ -1,11 +1,13 @@
 /*
  * PSIS 2024/2025 - Project Part 1
  *
- * Filename: game-logic.h
+ * Filename: game-logic.c
  *
  * Authors:
  * - Carlos Santos - 102985 - carlos.r.santos@tecnico.ulisboa.pt
  * - Tomas Corral  - 102446 - tomas.corral@tecnico.ulisboa.pt
+ *
+ * Group ID: 20
  *
  * Description:
  * Handles the game logic for the server. Updates aliens, receives and process client messages and publishes updates to displays
