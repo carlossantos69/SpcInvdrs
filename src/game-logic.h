@@ -1,9 +1,18 @@
 /*
- * File: space-display.c
- * Author: Carlos Santos e Tomás Corral
- * Description: This is the header file for the game logic program.
- * Date: 11/12/2024
+ * PSIS 2024/2025 - Project Part 1
+ *
+ * Filename: game-logic.h
+ *
+ * Authors:
+ * - Carlos Santos - 102985 - carlos.r.santos@tecnico.ulisboa.pt
+ * - Tomas Corral  - 102446 - tomas.corral@tecnico.ulisboa.pt
+ *
+ * Description:
+ * Header file for game-logic.c
  */
+
+#ifndef GAME_LOGIC_H
+#define GAME_LOGIC_H
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -68,3 +77,6 @@ void update_game_state();
 void send_game_over_state();
 void cleanup();
 void game_logic(void* resp, void* pub);
+
+
+#endif

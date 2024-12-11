@@ -1,8 +1,14 @@
 /*
- * File: game-logic.c
- * Author: Carlos Santos e Tomás Corral
- * Description: This file implements the game logic.
- * Date: 11/12/2024
+ * PSIS 2024/2025 - Project Part 1
+ *
+ * Filename: game-logic.h
+ *
+ * Authors:
+ * - Carlos Santos - 102985 - carlos.r.santos@tecnico.ulisboa.pt
+ * - Tomas Corral  - 102446 - tomas.corral@tecnico.ulisboa.pt
+ *
+ * Description:
+ * Handles the game logic for the server. Updates aliens, receives and process client messages and publishes updates to displays
  */
 
 #include "game-logic.h"
@@ -231,7 +237,6 @@ int is_valid_move(Player_t* player, const char direction) {
     return 0;
 }
 
-// TODO: Make random spawn position inside of availabe row/collum
 void initialize_player_position(Player_t* player) {
     switch(player->zone) {
         case ZONE_A: // First column (x=0)

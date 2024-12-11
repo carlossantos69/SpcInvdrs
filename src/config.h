@@ -1,8 +1,14 @@
 /*
- * File: space-display.c
- * Author: Carlos Santos e Tomás Corral
- * Description: This is the config file used by the clients.
- * Date: 11/12/2024
+ * PSIS 2024/2025 - Project Part 1
+ *
+ * Filename: config.h
+ *
+ * Authors:
+ * - Carlos Santos - 102985 - carlos.r.santos@tecnico.ulisboa.pt
+ * - Tomas Corral  - 102446 - tomas.corral@tecnico.ulisboa.pt
+ *
+ * Description:
+ * Definitions for constants used in the apps
  */
 
 #ifndef SPCINVDRS_CONFIG_H
@@ -15,7 +21,6 @@
 #define KILL_POINTS 1
 
 // Network Configuration
-// config.h
 #define SERVER_ENDPOINT_REQ "tcp://*:5555"    // For REQ/REP with astronauts
 #define SERVER_ENDPOINT_PUB "tcp://*:5556"    // For PUB/SUB with display
 #define CLIENT_CONNECT_REQ "tcp://localhost:5555"  // For astronauts to connect
@@ -68,7 +73,6 @@
 #define ZONE_H 8
 
 // Command responses and error Codes
-// Chars for easer code parse in clients
 #define RESP_OK 0
 #define ERR_UNKNOWN_CMD -1
 #define ERR_UNKNOWN_CMD_MSG "Unknown command"
@@ -89,4 +93,4 @@
 #define ERR_LASER_COOLDOWN -9
 #define ERR_LASER_COOLDOWN_MSG "Laser cooldown"
 
-#endif // SPCINVDRS_CONFIG
+#endif

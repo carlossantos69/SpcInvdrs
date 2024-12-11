@@ -1,18 +1,18 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -Icommon-files
+CFLAGS = -Wall -Wextra -I src
 LDFLAGS = -lncurses -lzmq
 
 # Directories
-ASTRONAUT_CLIENT_DIR = Astronaut-clt
-GAME_SERVER_DIR = Game-Server-clt
-OUTER_SPACE_DISPLAY_DIR = Outer-Space-Display-clt
-COMMON_FILES_DIR = common-files
+ASTRONAUT_CLIENT_DIR = Astronaut-app
+GAME_SERVER_DIR = Game-Server-app
+OUTER_SPACE_DISPLAY_DIR = Outer-Space-Display-app
+SRC_DIR = src
 
 # Source files
 ASTRONAUT_CLIENT_SRCS = $(ASTRONAUT_CLIENT_DIR)/astronaut-client.c
 GAME_SERVER_SRCS = $(GAME_SERVER_DIR)/game-server.c
 OUTER_SPACE_DISPLAY_SRCS = $(OUTER_SPACE_DISPLAY_DIR)/outer-space-display.c
-COMMON_SRCS = $(COMMON_FILES_DIR)/game-logic.c $(COMMON_FILES_DIR)/space-display.c
+COMMON_SRCS = $(SRC_DIR)/game-logic.c $(SRC_DIR)/space-display.c
 
 # Object files
 ASTRONAUT_CLIENT_OBJS = $(ASTRONAUT_CLIENT_SRCS:.c=.o)
@@ -45,9 +45,6 @@ install-deps:
 		build-essential \
 		libncurses5-dev \
 		libzmq3-dev
-
-	# Alternatively for other distributions, 
-	# use their respective package managers
 
 # Run all components
 run: $(TARGETS)

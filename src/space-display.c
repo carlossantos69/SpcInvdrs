@@ -1,8 +1,14 @@
 /*
- * File: space-display.c
- * Author: Carlos Santos e Tomás Corral
- * Description: This file implements the space display program used in outer space display and in the game server.
- * Date: 11/12/2024
+ * PSIS 2024/2025 - Project Part 1
+ *
+ * Filename: game-logic.c
+ *
+ * Authors:
+ * - Carlos Santos - 102985 - carlos.r.santos@tecnico.ulisboa.pt
+ * - Tomas Corral  - 102446 - tomas.corral@tecnico.ulisboa.pt
+ *
+ * Description:
+ * Logic for the UI and screen using ncurses. All the UI code is here
  */
 
 #include <ncurses.h>

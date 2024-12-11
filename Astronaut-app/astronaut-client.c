@@ -1,9 +1,16 @@
 /*
- * File: astronaut-client.c
- * Author: Carlos Santos e Tomás Corral
- * Description: This file contains all the code for astronaut client.
- * Date: 11/12/2024
+ * PSIS 2024/2025 - Project Part 1
+ *
+ * Filename: astronaut-cient.c
+ *
+ * Authors:
+ * - Carlos Santos - 102985 - carlos.r.santos@tecnico.ulisboa.pt
+ * - Tomas Corral  - 102446 - tomas.corral@tecnico.ulisboa.pt
+ *
+ * Description:
+ * Code that handles game server application.
  */
+
 
 #include <ncurses.h>
 #include <zmq.h>
@@ -11,17 +18,29 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "../common-files/config.h" 
+#include "../src/config.h" 
 
 // ZeroMQ context and socket
 void* context;
 void* requester;
 
-// Player state
+// Client state
 char player_id = '\0';
 int player_score = 0;
 char session_token[33]; // To store the session token received from the server
 
+
+
+/**
+ * @brief Constructs an error message based on the provided error code.
+ *
+ * This function takes an error code and a message buffer, and constructs
+ * a descriptive error message by appending the appropriate error message
+ * string to the buffer.
+ *
+ * @param code The error code indicating the type of error.
+ * @param msg A buffer to store the constructed error message.
+ */
 void find_error(int code, char *msg) {
     strcpy(msg, "Error: ");
     switch (code) {
@@ -57,6 +76,14 @@ void find_error(int code, char *msg) {
     }
 }
 
+
+/**
+ * @brief Sends a connect message to the server and handles the response.
+ * 
+ * This function sends a connect message to the server using ZeroMQ, waits for the response,
+ * and processes it. If the response indicates an error, it displays the error message and exits.
+ * Otherwise, it initializes the display with the player ID and session token.
+ */
 void send_connect_message() {
     char msg[2];
     msg[0] = CMD_CONNECT;
@@ -112,6 +139,15 @@ void send_connect_message() {
     }
 }
 
+
+/**
+ * @brief Handles key input from the user and sends appropriate commands to the server.
+ * 
+ * This function captures key presses and sends corresponding commands to the server
+ * using ZeroMQ. It handles movement commands (arrow keys), a zap command (space bar),
+ * and a disconnect command ('q' or 'Q'). It also processes the server's response to
+ * update the player's score and display status messages.
+ */
 void handle_key_input() {
     int ch = getch();
     if (ch == ERR) return; // No key pressed
@@ -186,6 +222,15 @@ void handle_key_input() {
     }
 }
 
+/**
+ * @brief Main function for the astronaut client application.
+ * 
+ * This function initializes the ncurses library for handling terminal input/output,
+ * sets up a ZeroMQ context and socket for communication with the server, and enters
+ * the main game loop where it handles key input and sends messages to the server.
+ * 
+ * @return int Exit status of the program.
+ */
 int main() {
     // Initialize ncurses
     initscr();

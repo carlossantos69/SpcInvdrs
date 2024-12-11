@@ -1,17 +1,23 @@
 /*
- * File: game-server.c
- * Author: Carlos Santos e Tomás Corral
- * Description: This file implements the game sever functionality.
- * Date: 11/12/2024
+ * PSIS 2024/2025 - Project Part 1
+ *
+ * Filename: game-server.c
+ *
+ * Authors:
+ * - Carlos Santos - 102985 - carlos.r.santos@tecnico.ulisboa.pt
+ * - Tomas Corral  - 102446 - tomas.corral@tecnico.ulisboa.pt
+ *
+ * Description:
+ * Code that handles game server application. Calls game.logic.c and space-display.c
  */
 
 #include <stdbool.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <zmq.h>
-#include "../common-files/config.h" 
-#include "../common-files/game-logic.h" 
-#include "../common-files/space-display.h" 
+#include "../src/config.h" 
+#include "../src/game-logic.h" 
+#include "../src/space-display.h" 
 
 
 int main() {

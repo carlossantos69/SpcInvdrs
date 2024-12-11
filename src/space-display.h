@@ -1,8 +1,14 @@
 /*
- * File: space-display.c
- * Author: Carlos Santos e Tomás Corral
- * Description: This is the header file for the space display program.
- * Date: 11/12/2024
+ * PSIS 2024/2025 - Project Part 1
+ *
+ * Filename: space-display.h
+ *
+ * Authors:
+ * - Carlos Santos - 102985 - carlos.r.santos@tecnico.ulisboa.pt
+ * - Tomas Corral  - 102446 - tomas.corral@tecnico.ulisboa.pt
+ *
+ * Description:
+ * Header file for space-display.h
  */
 
 #ifndef SPACE_DISPLAY_H
