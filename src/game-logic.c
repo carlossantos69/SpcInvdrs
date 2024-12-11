@@ -25,7 +25,17 @@ time_t last_alien_move = 0;
 Player_t players[MAX_PLAYERS];
 Alien_t aliens[MAX_ALIENS];
 
-// Auxiliary functions to find players by ID or session token
+
+/**
+ * @brief Finds a player by their ID.
+ *
+ * This function searches through the list of players and returns a pointer
+ * to the player with the specified ID.
+ *
+ * @param id The ID of the player to find.
+ * @return A pointer to the player with the specified ID, or NULL if no player
+ *         with the given ID is found.
+ */
 Player_t* find_by_id(const char id) {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (players[i].id == id) {
@@ -34,6 +44,18 @@ Player_t* find_by_id(const char id) {
     }
     return NULL;
 }
+
+
+/**
+ * @brief Finds a player by their session token.
+ *
+ * This function iterates through the list of players and compares each player's
+ * session token with the provided session token. If a match is found, a pointer
+ * to the corresponding player is returned.
+ *
+ * @param session_token The session token to search for.
+ * @return A pointer to the player with the matching session token, or NULL if no match is found.
+ */
 Player_t* find_by_session_token(const char* session_token) {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (strcmp(players[i].session_token, session_token) == 0) {
@@ -42,6 +64,17 @@ Player_t* find_by_session_token(const char* session_token) {
     }
     return NULL;
 }
+
+
+/**
+ * @brief Finds a player by their zone.
+ *
+ * This function searches through the list of players and returns a pointer
+ * to the player whose zone matches the specified zone.
+ *
+ * @param zone The zone to search for.
+ * @return A pointer to the player in the specified zone, or NULL if no player is found.
+ */
 Player_t* find_by_zone(const char zone) {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (players[i].zone == zone) {
@@ -51,7 +84,16 @@ Player_t* find_by_zone(const char zone) {
     return NULL;
 }
 
-// Generate a random session token
+/**
+ * @brief Generates a random session token.
+ *
+ * This function generates a random session token consisting of 
+ * hexadecimal characters (0-9, a-f). The generated token will be 
+ * 32 characters long, followed by a null terminator.
+ *
+ * @param token A pointer to a character array where the generated 
+ * token will be stored. The array must be at least 33 characters long.
+ */
 void generate_session_token(char* token) {
     const char charset[] = "abcdef0123456789";
     size_t length = 33;
@@ -62,7 +104,17 @@ void generate_session_token(char* token) {
     token[length - 1] = '\0';
 }
 
-// Randomly assign an ID to a player
+
+/**
+ * @brief Assigns a unique player ID from a predefined set of IDs.
+ *
+ * This function assigns a unique player ID from the set {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'}.
+ * It first collects all available IDs by checking which IDs are not currently in use.
+ * If no IDs are available, it returns '\0'.
+ * Otherwise, it selects a random available ID and returns it.
+ *
+ * @return A unique player ID if available, otherwise '\0'.
+ */
 char assign_player_id() {
     char ids[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'};
     int available_ids[MAX_PLAYERS];
@@ -86,7 +138,16 @@ char assign_player_id() {
 }
 
 
-// Return a random zone to put the player
+/**
+ * @brief Selects a random zone that is not currently occupied.
+ *
+ * This function generates a random zone from a predefined list of zones
+ * (ZONE_A to ZONE_H). It continues to generate a random zone until it finds
+ * one that is not currently occupied, as determined by the `find_by_zone`
+ * function.
+ *
+ * @return An integer representing the randomly selected unoccupied zone.
+ */
 int get_random_zone() {
     int zones[] = {ZONE_A, ZONE_B, ZONE_C, ZONE_D, ZONE_E, ZONE_F, ZONE_G, ZONE_H};
     int random_zone;
@@ -98,6 +159,15 @@ int get_random_zone() {
     }
 }
 
+/**
+ * @brief Clears the player's data by resetting its fields to default values.
+ *
+ * This function sets the player's ID to '\0', score to 0, last fire time to 0,
+ * last stun time to 0, session token to an empty string, and deactivates the laser.
+ *
+ * @param player Pointer to the Player_t structure to be cleared. If the pointer
+ *               is NULL, the function returns immediately.
+ */
 void clear_player(Player_t *player) {
     if (player == NULL) return;
 
@@ -110,6 +180,14 @@ void clear_player(Player_t *player) {
 }
 
 
+/**
+ * @brief Checks if all aliens have been destroyed.
+ *
+ * This function iterates through the array of aliens and checks if any of them are still active.
+ * If at least one alien is active, the function returns 0. If all aliens are inactive, it returns 1.
+ *
+ * @return int 1 if all aliens are inactive, 0 if at least one alien is still active.
+ */
 int all_aliens_destroyed() {
     for (int i = 0; i < MAX_ALIENS; i++) {
         if (aliens[i].active) {
@@ -119,6 +197,14 @@ int all_aliens_destroyed() {
     return 1; // All aliens are inactive
 }
 
+/**
+ * @brief Initializes the game state by setting up players and aliens.
+ *
+ * This function initializes the game state by clearing player data and
+ * placing aliens at random positions within the inner grid. It uses the
+ * current time as the seed for the random number generator to ensure
+ * different positions for aliens in each game session.
+ */
 void initialize_game_state() {
     // Initialize players
     srand(time(NULL));
@@ -136,6 +222,25 @@ void initialize_game_state() {
     }
 }
 
+/**
+ * @brief Sends the current game state to all subscribers.
+ *
+ * This function constructs a message containing the state of all active players,
+ * their positions, scores, and laser statuses, as well as the positions of all
+ * active aliens. The message is then sent to display subscribers.
+ *
+ * The message format includes:
+ * - Player information: CMD_PLAYER, player ID, x position, y position
+ * - Score information: CMD_SCORE, player ID, score
+ * - Laser information (if active): CMD_LASER, x position, y position, zone
+ * - Alien information: CMD_ALIEN, x position, y position
+ *
+ * The function iterates through all players and aliens, adding their information
+ * to the message if they are active.
+ *
+ * @note The function assumes that the players and aliens arrays, as well as the
+ *       publisher socket, are properly initialized and accessible.
+ */
 void send_game_state() {
     char message[BUFFER_SIZE] = "";
     char temp[100];
@@ -188,7 +293,17 @@ void send_game_state() {
 }
 
 
-// Checks if movement is valid based on player zone
+/**
+ * @brief Checks if the player's move in the specified direction is valid.
+ *
+ * This function calculates the potential new position of the player based on the
+ * given direction and checks if the move is valid within the constraints of the
+ * player's current zone.
+ *
+ * @param player Pointer to the Player_t structure representing the player.
+ * @param direction Character representing the direction of the move (MOVE_LEFT, MOVE_RIGHT, MOVE_UP, MOVE_DOWN).
+ * @return int Returns 1 if the move is valid, 0 otherwise.
+ */
 int is_valid_move(Player_t* player, const char direction) {
     // Get current position
     int new_x = player->x;
@@ -237,6 +352,15 @@ int is_valid_move(Player_t* player, const char direction) {
     return 0;
 }
 
+/**
+ * @brief Initializes the player's position based on their starting zone.
+ *
+ * This function sets the initial x and y coordinates of a player based on the
+ * zone they are assigned to. Each zone corresponds to a specific starting 
+ * position on the grid.
+ *
+ * @param player A pointer to the Player_t structure whose position is to be initialized.
+ */
 void initialize_player_position(Player_t* player) {
     switch(player->zone) {
         case ZONE_A: // First column (x=0)
@@ -279,12 +403,32 @@ void initialize_player_position(Player_t* player) {
             player->y = GRID_HEIGHT - 2;
             break;
     }
-    //printf("Initialized player %c at position (%d, %d)\n", id, player->x, player->y);
 }
 
 
+/**
+ * @brief Processes a message received from a client and generates an appropriate response.
+ *
+ * This function handles various commands sent by clients, including connecting to the game,
+ * moving a player, firing a laser, and disconnecting from the game. It validates the message,
+ * checks the session token, and performs the requested action if all validations pass.
+ *
+ * @param message The message received from the client.
+ * @param response The response to be sent back to the client.
+ *
+ * The message format varies based on the command:
+ * - CONNECT: "C"
+ * - MOVE: "M <player_id> <session_token> <direction>"
+ * - ZAP: "Z <player_id> <session_token>"
+ * - DISCONNECT: "D <player_id> <session_token>"
+ *
+ * The response format also varies based on the result of the command:
+ * - Success: "<response_code> [client_score]"
+ * - Error: "<error_code>"
+ *
+ * Error codes come from config.h constants
+ */
 void process_client_message(char* message, char* response) {
-    //printf("Received message: %s\n", message);
     if (message[0] == CMD_CONNECT) {
         char new_id = assign_player_id();
         if (new_id != '\0') {
@@ -460,6 +604,23 @@ void process_client_message(char* message, char* response) {
 
 
 
+/**
+ * @brief Checks for collisions between active lasers and aliens or players.
+ * 
+ * This function iterates through all players and checks if their laser is active.
+ * If the laser is active, it checks for collisions with aliens and other players
+ * based on the player's zone and the laser's direction.
+ * 
+ * - If the player's zone is ZONE_A, ZONE_H, ZONE_D, or ZONE_F, it checks for collisions
+ *   with aliens and players along the y-axis.
+ * - Otherwise, it checks for collisions with aliens and players along the x-axis.
+ * 
+ * When a collision with an alien is detected, the alien is marked as inactive and
+ * the player's score is updated.
+ * 
+ * When a collision with another player is detected, the other player's last stun time
+ * is updated to the current time.
+ */
 void check_laser_collisions() {
     for (int i = 0; i < MAX_PLAYERS; i++) {
         if (players[i].laser.active) {
@@ -508,7 +669,16 @@ void check_laser_collisions() {
 }
 
 
-//TODO: CHECK IF OTHER ALLIEN IS IN NEW POSITION
+/**
+ * @brief Updates the positions of active aliens in the game.
+ *
+ * This function moves each active alien in a random direction (up, down, left, or right)
+ * if at least one second has passed since the last move. The new position is only applied
+ * if it is within the defined alien area boundaries.
+ *
+ * The function uses the current time to determine if the aliens should be moved and updates
+ * the last move time accordingly.
+ */
 void update_alien_positions() {
     time_t current_time = time(NULL);
     
@@ -548,6 +718,13 @@ void update_alien_positions() {
     }
 }
 
+/**
+ * @brief Updates the game state by performing several actions:
+ *        - Updates the positions of all aliens.
+ *        - Checks for laser collisions and updates scores accordingly.
+ *        - Deactivates lasers that have been active for longer than LASER_DURATION seconds.
+ *        - Checks if all aliens are destroyed and sets the game over flag if true.
+ */
 void update_game_state() {
     time_t current_time = time(NULL);
     
@@ -570,6 +747,18 @@ void update_game_state() {
     }
 }
 
+/**
+ * @brief Sends the game over state message to all displays.
+ *
+ * This function constructs a message indicating the game is over and includes
+ * the final scores of all players. The message is then sent using ZeroMQ.
+ *
+ * The message format includes:
+ * - A game over command.
+ * - The final scores of all players who participated in the game.
+ *
+ * The message is sent via the ZeroMQ publisher socket.
+ */
 void send_game_over_state() {
     char message[BUFFER_SIZE] = "";
     char temp[100];
@@ -595,6 +784,16 @@ void send_game_over_state() {
     zmq_send(publisher, message, strlen(message), 0);
 }
 
+/**
+ * @brief Main game logic loop.
+ *
+ * This function initializes the game state and enters a loop where it processes
+ * client messages, updates the game state, and sends updates to the display.
+ * The loop continues until the game is over.
+ *
+ * @param resp Pointer to the responder socket.
+ * @param pub Pointer to the publisher socket.
+ */
 void game_logic(void* resp, void* pub) {
     initialize_game_state();
     printf("Game logic started\n");

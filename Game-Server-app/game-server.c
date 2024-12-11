@@ -20,6 +20,16 @@
 #include "../src/space-display.h" 
 
 
+/**
+ * @brief Main function to start the game server and display.
+ *
+ * This function creates a new process using fork(). The child process is responsible for
+ * the game display, while the parent process handles the game logic. 
+ * The parent process sets up REQ/REP and PUB sockets for communication
+ * with astronaut clients and the display client, respectively.
+ *
+ * @return int Returns 0 on successful execution, 1 on failure to fork.
+ */
 int main() {
     pid_t pid;
 
