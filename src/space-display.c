@@ -19,19 +19,8 @@
 #include <time.h>
 #include <string.h>
 
-#define GRID_WIDTH 20
-#define GRID_HEIGHT 20
-
-#define LASER_HORIZONTAL '-'
-#define LASER_VERTICAL '|'
-#define LASER_DISPLAY_TIME 500000 // 0.5 seconds in microseconds
-
-#define DEBUG_LINE (GRID_HEIGHT + 5)  // Line to show debug messages
-
 // ZeroMQ subscriber socket
 void* subscriber;
-
-
 
 // Array to store the display information of players
 disp_Player_t players_disp[MAX_PLAYERS];
@@ -111,6 +100,7 @@ void initialize_display() {
     refresh();
 }
 
+
 /**
  * @brief Updates the game grid and player statuses based on the provided update message.
  *
@@ -152,7 +142,6 @@ void update_grid(char* msg) {
                 if (idx >= 0 && idx < MAX_PLAYERS) {
                     players_disp[idx].id = id;
                     players_disp[idx].active = 1;
-                    //mvprintw(DEBUG_LINE, 0, "Player %c active at index %d", id, idx);
                 }
             }
         } else if (line[0] == CMD_ALIEN) {
@@ -201,7 +190,6 @@ void update_grid(char* msg) {
             if (idx >= 0 && idx < MAX_PLAYERS) {
                 players_disp[idx].active = 1;
                 players_disp[idx].score = player_score;
-                //mvprintw(DEBUG_LINE, 40, "Score update: Player %c = %d", id, player_score);
             }
         }
         // Move to the next line
@@ -298,10 +286,10 @@ void draw_grid(void) {
             int display_y = y + 3;
             int display_x = x + 4;
 
-            // Clear lasers after LASER_DISPLAY_TIME
+            // Clear lasers after LASER_DURATION
             if ((ch == LASER_HORIZONTAL || ch == LASER_VERTICAL) && grid[y][x].laser_time > 0) {
                 elapsed = difftime(now, grid[y][x].laser_time);
-                if (elapsed >= LASER_DISPLAY_TIME / 1000000.0) {
+                if (elapsed >= LASER_DURATION) {
                     grid[y][x].ch = ' ';
                     grid[y][x].laser_time = 0;
                     mvaddch(display_y, display_x, ' ');
@@ -337,6 +325,7 @@ void draw_grid(void) {
     // Refresh the screen
     refresh();
 }
+
 
 /**
  * @brief Displays the victory screen at the end of the game.
@@ -406,6 +395,7 @@ void show_victory_screen() {
     nodelay(stdscr, FALSE);  // Make getch() blocking
     getch();
 }
+
 
 /**
  * @brief Main display function that initializes the display and handles the main loop.

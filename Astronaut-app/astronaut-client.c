@@ -222,6 +222,7 @@ void handle_key_input() {
     }
 }
 
+
 /**
  * @brief Main function for the astronaut client application.
  * 

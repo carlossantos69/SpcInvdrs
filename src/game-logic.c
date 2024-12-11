@@ -18,12 +18,15 @@
 void* responder;  // For REQ/REP with astronauts
 void* publisher;  // For PUB/SUB with display
 
-int game_over = 0;
-time_t last_alien_move = 0;
-
 // Game state representation
 Player_t players[MAX_PLAYERS];
 Alien_t aliens[MAX_ALIENS];
+
+// Indicates whether the game is over (1) or not (0)
+int game_over = 0;
+
+// Stores the timestamp of the last alien update
+time_t last_alien_move = 0;
 
 
 /**

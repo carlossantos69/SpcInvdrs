@@ -35,10 +35,9 @@
 #define LASER_DURATION 0.5
 
 // UI Positions
-// TODO: START USING THESE
-#define SCORE_START_Y 5
 #define SCORE_START_X (GRID_WIDTH + 6)
-#define SCORE_PADDING 4  // Space between grid and scores
+#define LASER_HORIZONTAL '-'
+#define LASER_VERTICAL '|'
 
 // Color pair definitions
 #define COLOR_ASTRONAUT 1
