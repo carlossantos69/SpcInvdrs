@@ -28,6 +28,11 @@
 #define ALIEN_AREA_START 2   // Where aliens can start moving
 #define ALIEN_AREA_END 17    // Where aliens must stop moving
 
+/**
+ * @brief Structure representing a laser in the game.
+ * 
+ * This structure holds the coordinates, active status, and creation time of a laser.
+ */
 typedef struct {
     int x;
     int y;
@@ -35,6 +40,40 @@ typedef struct {
     time_t creation_time; 
 } Laser_t;
 
+/**
+ * @struct Player_t
+ * @brief Represents a player in the game.
+ *
+ * This structure holds information about a player, including their position,
+ * score, and various timestamps related to their actions in the game.
+ *
+ * @var Player_t::id
+ * The unique identifier for the player.
+ *
+ * @var Player_t::zone
+ * The zone in which the player is currently located.
+ *
+ * @var Player_t::x
+ * The x-coordinate of the player's position.
+ *
+ * @var Player_t::y
+ * The y-coordinate of the player's position.
+ *
+ * @var Player_t::score
+ * The current score of the player.
+ *
+ * @var Player_t::last_fire_time
+ * The timestamp of the last time the player fired their weapon.
+ *
+ * @var Player_t::last_stun_time
+ * The timestamp of the last time the player was stunned.
+ *
+ * @var Player_t::session_token
+ * A 32-character hexadecimal session token used to identify the player's session.
+ *
+ * @var Player_t::laser
+ * The laser associated with the player.
+ */
 typedef struct {
     char id;
     int zone;
@@ -47,16 +86,16 @@ typedef struct {
     Laser_t laser; //The laser of the player 
 } Player_t;
 
+/**
+ * @brief Structure representing an alien in the game.
+ * 
+ * This structure holds the coordinates and active status of an alien.
+ */
 typedef struct {
     int x;
     int y;
     int active;
 } Alien_t;
-
-typedef struct {
-    char ch;            // Character to display at this cell
-    time_t laser_time;  // Timestamp when the laser was drawn
-} Cell_t;
 
 /**
  * @brief Finds a player by their unique ID.

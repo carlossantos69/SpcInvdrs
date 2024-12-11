@@ -28,17 +28,33 @@
 
 #define DEBUG_LINE (GRID_HEIGHT + 5)  // Line to show debug messages
 
-int game_over_display = 0;
-
-// ZeroMQ socket
+// ZeroMQ subscriber socket
 void* subscriber;
 
-disp_Player_t players_disp[MAX_PLAYERS];  // Array to store players
 
-// Game state representation
+
+// Array to store the display information of players
+disp_Player_t players_disp[MAX_PLAYERS];
+
+// 2D array to represent the game grid
 disp_Cell_t grid[GRID_HEIGHT][GRID_WIDTH];
 
+// Flag indicating whether the game over display is active
+int game_over_display = 0;
 
+
+/**
+ * @brief Initializes the display for the space game.
+ *
+ * This function sets up the ncurses environment, initializes color pairs,
+ * clears the grid, initializes player scores, and draws the grid with row
+ * and column numbers as well as a border around the grid.
+ *
+ * The grid is initialized to empty spaces, and player scores are set to zero.
+ * Row numbers are drawn on the left side of the grid, and column numbers are
+ * drawn on the top. A border is drawn around the grid to visually separate it
+ * from the rest of the display.
+ */
 void initialize_display() {
     // Initialize ncurses mode
     initscr();
@@ -95,7 +111,17 @@ void initialize_display() {
     refresh();
 }
 
-void update_grid(char* update_message) {
+/**
+ * @brief Updates the game grid and player statuses based on the provided update message.
+ *
+ * This function clears the current grid and player statuses, then parses the update message
+ * to update the grid with new player positions, alien positions, laser beams, and player scores.
+ * It also sets a flag if the game is over.
+ *
+ * @param msg A string containing the update information, with each line representing
+ *            a different update command (e.g., player positions, alien positions, laser beams, scores).
+ */
+void update_grid(char* msg) {
     // Clear the grid first
     for (int y = 0; y < GRID_HEIGHT; y++) {
         for (int x = 0; x < GRID_WIDTH; x++) {
@@ -108,7 +134,7 @@ void update_grid(char* update_message) {
     }
 
      // Parse the message line by line
-    char* line = strtok(update_message, "\n");
+    char* line = strtok(msg, "\n");
     while (line != NULL) {
         if (line[0] == CMD_GAME_OVER) {
             game_over_display = 1; // Set a flag to indicate the game is over
@@ -183,6 +209,22 @@ void update_grid(char* update_message) {
     }
 }
 
+
+/**
+ * @brief Draws the scores of active players on the screen.
+ *
+ * This function clears the score area, displays the scores header, 
+ * and lists the scores of all active players. It also draws a border 
+ * around the scores area.
+ *
+ * The scores are displayed in bold and color-coded for astronauts.
+ * The function assumes that the players_disp array contains information 
+ * about the players, including their active status, ID, and score.
+ *
+ * The score area is cleared before displaying the scores, and a border 
+ * is drawn around the scores area to visually separate it from other 
+ * parts of the screen.
+ */
 void draw_scores() {
     // Clear the score area first
     for (int y = 3; y < GRID_HEIGHT + 3; y++) {
@@ -233,6 +275,19 @@ void draw_scores() {
 }
 
 
+/**
+ * @brief Draws the game grid on the screen.
+ *
+ * This function iterates through the game grid and draws each cell based on its content.
+ * It handles the following elements:
+ * - Aliens ('*') with a specific color.
+ * - Lasers (horizontal and vertical) with a specific color and bold attribute.
+ * - Astronauts (characters 'A' to 'H') with a specific color.
+ * - Empty cells as spaces.
+ *
+ * Lasers are cleared after a specified display time.
+ * The function also draws the scores and refreshes the screen.
+ */
 void draw_grid(void) {
     time_t now = time(NULL);
     double elapsed;
@@ -283,6 +338,15 @@ void draw_grid(void) {
     refresh();
 }
 
+/**
+ * @brief Displays the victory screen at the end of the game.
+ *
+ * This function clears the terminal screen and displays the victory screen,
+ * which includes the game over message, the winner's information, and the 
+ * final scores of all active players. It waits for user input before exiting.
+ *
+ * It is called when the game ends to show the final results to the players.
+ */
 void show_victory_screen() {
     // Clear the screen
     clear();
@@ -343,6 +407,16 @@ void show_victory_screen() {
     getch();
 }
 
+/**
+ * @brief Main display function that initializes the display and handles the main loop.
+ *
+ * This function initializes the display and enters the main loop where it listens for
+ * messages from a given ZeroMQ subscriber socket. It updates the display grid based on
+ * received messages and handles user input to exit the loop. When the game is over, it
+ * shows the victory screen.
+ *
+ * @param sub A pointer to the ZeroMQ subscriber socket.
+ */
 void display_main(void* sub) {
     subscriber = sub;
 
