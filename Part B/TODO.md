@@ -1,12 +1,19 @@
 # Game Server
 
 Vai ter de ser reformulado para usar threads.
+
 Recebe mensagens dos clients: astronaut e astronaut-display, são a mesma coisa
+
 Manda mensagens para os displays: astronaut-display e outer-display; scores para a app de scores 
+
 Threads para:
+
     - movimentos dos aliens
+
     - receber mensagens
+
     - mandar mensagens
+    
     - ...
 
 Usar mutexes quando se aceder a memoria partilhada
