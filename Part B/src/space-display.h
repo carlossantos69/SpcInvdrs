@@ -18,8 +18,6 @@
 
 #include <time.h>
 
-extern int game_over_display;
-
 /**
  * @brief Structure to represent a player in the display system.
  * 
@@ -51,6 +49,16 @@ typedef struct {
     char ch;
     time_t laser_time; // Timestamp when the laser was drawn
 } disp_Cell_t;
+
+
+extern disp_Player_t players_disp[MAX_PLAYERS];
+
+extern disp_Cell_t grid[GRID_HEIGHT][GRID_WIDTH];
+
+extern int game_over_display;
+
+extern pthread_mutex_t display_lock;
+
 
 /**
  * @brief Initializes the display for the game.
@@ -99,6 +107,6 @@ void show_victory_screen();
  * This function is the main entry point for the display module, handling
  * the overall display logic and coordination.
  */
-void display_main(void* sub);
+void display_main();
 
 #endif

@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -I src
-LDFLAGS = -lncurses -lzmq
+LDFLAGS = -lncurses -lzmq -lpthread
 
 # Directories
 ASTRONAUT_CLIENT_DIR = Astronaut-app

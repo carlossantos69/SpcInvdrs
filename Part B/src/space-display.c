@@ -14,15 +14,12 @@
  */
 
 #include <ncurses.h>
+#include <pthread.h>
 #include <unistd.h>
-#include <zmq.h>
 #include "config.h"
 #include "space-display.h"
 #include <time.h>
 #include <string.h>
-
-// ZeroMQ subscriber socket
-void* subscriber;
 
 // Array to store the display information of players
 disp_Player_t players_disp[MAX_PLAYERS];
@@ -32,6 +29,9 @@ disp_Cell_t grid[GRID_HEIGHT][GRID_WIDTH];
 
 // Flag indicating whether the game over display is active
 int game_over_display = 0;
+
+// Mutex for display data
+pthread_mutex_t display_lock;  // Mutex variable
 
 
 /**
@@ -60,19 +60,6 @@ void initialize_display() {
     init_pair(COLOR_ALIEN, COLOR_RED, COLOR_BLACK);         // Aliens
     init_pair(COLOR_LASER, COLOR_RED, COLOR_BLACK);      // Lasers
 
-    // Initialize grid to empty spaces
-    for (int y = 0; y < GRID_HEIGHT; y++) {
-        for (int x = 0; x < GRID_WIDTH; x++) {
-            grid[y][x].ch = ' ';
-        }
-    }
-
-    // Initialize player scores
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        players_disp[i].id = '\0';
-        players_disp[i].score = 0;
-    }
-
     // Draw row numbers on the left
     for (int i = 0; i < GRID_HEIGHT; i++) {
         mvprintw(i + 3, 1, "%d", (i + 1) % 10);
@@ -99,103 +86,6 @@ void initialize_display() {
     mvaddch(GRID_HEIGHT + 3, GRID_WIDTH + 4, '+');
 
     refresh();
-}
-
-
-/**
- * @brief Updates the game grid and player statuses based on the provided update message.
- *
- * This function clears the current grid and player statuses, then parses the update message
- * to update the grid with new player positions, alien positions, laser beams, and player scores.
- * It also sets a flag if the game is over.
- *
- * @param msg A string containing the update information, with each line representing
- *            a different update command (e.g., player positions, alien positions, laser beams, scores).
- */
-void update_grid(char* msg) {
-    // Clear the grid first
-    for (int y = 0; y < GRID_HEIGHT; y++) {
-        for (int x = 0; x < GRID_WIDTH; x++) {
-            grid[y][x].ch = ' ';
-        }
-    }
-
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        players_disp[i].active = 0;
-    }
-
-     // Parse the message line by line
-    char* line = strtok(msg, "\n");
-    while (line != NULL) {
-        if (line[0] == CMD_GAME_OVER) {
-            game_over_display = 1; // Set a flag to indicate the game is over
-
-
-        } else if (line[0] == CMD_PLAYER) {
-            char id;
-            int x, y;
-            sscanf(line, "%*c %c %d %d", &id, &x, &y);
-            
-            if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
-                grid[y][x].ch = id;
-                // Update player status
-                int idx = id - 'A';
-                if (idx >= 0 && idx < MAX_PLAYERS) {
-                    players_disp[idx].id = id;
-                    players_disp[idx].active = 1;
-                }
-            }
-        } else if (line[0] == CMD_ALIEN) {
-            // Format: ALIEN <x> <y>
-            int x, y;
-            sscanf(line, "%*c %d %d", &x, &y);
-            if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
-                grid[y][x].ch = '*'; // Represent aliens with '*'
-            }
-        } else if (line[0] == CMD_LASER) {
-            int x, y;
-            int zone;
-            sscanf(line, "%*c %d %d %d", &x, &y, &zone);
-            
-            time_t now = time(NULL);
-            
-            if (zone == ZONE_A || zone == ZONE_H) {
-                for (int i = x; i < GRID_WIDTH; i++) {
-                    grid[y][i].ch = LASER_HORIZONTAL;
-                    grid[y][i].laser_time = now;
-                }
-            } else if (zone == ZONE_D || zone == ZONE_F) {
-                for (int i = x; i >= 0; i--) {
-                    grid[y][i].ch = LASER_HORIZONTAL;
-                    grid[y][i].laser_time = now;
-                }
-            }
-            if (zone == ZONE_E || zone == ZONE_G) {
-                for (int i = y; i < GRID_HEIGHT; i++) {
-                    grid[i][x].ch = LASER_VERTICAL;
-                    grid[i][x].laser_time = now;
-                }
-            } else if (zone == ZONE_B || zone == ZONE_C) {
-                for (int i = y; i >= 0; i--) {
-                    grid[i][x].ch = LASER_VERTICAL;
-                    grid[i][x].laser_time = now;
-                }
-            }
-            
-        } else if (line[0] == CMD_SCORE) {
-            char id;
-            int player_score;
-            sscanf(line, "%*c %c %d", &id, &player_score);
-            
-            int idx = id - 'A';
-            if (idx >= 0 && idx < MAX_PLAYERS) {
-                players_disp[idx].active = 1;
-                players_disp[idx].score = player_score;
-            }
-        }
-        // Move to the next line
-        line = strtok(NULL, "\n");
-    }
 }
 
 
@@ -398,56 +288,26 @@ void show_victory_screen() {
 
 
 /**
- * @brief Main display function that initializes the display and handles the main loop.
+ * @brief Main display function that initializes the display and handles the main display loop.
  *
- * This function initializes the display and enters the main loop where it listens for
- * messages from a given ZeroMQ subscriber socket. It updates the display grid based on
- * received messages and handles user input to exit the loop. When the game is over, it
- * shows the victory screen.
+ * This function initializes the display and enters the main loop where it draws the screen. 
+ * The grid and display info should be modified in memory using the mutex in .h file. This function only draws the screen. External code must update the grid.
+ * When the game is over, it shows the victory screen.
  *
- * @param sub A pointer to the ZeroMQ subscriber socket.
  */
-void display_main(void* sub) {
-    subscriber = sub;
-
+void display_main() {
     // Initialize the display
     initialize_display();
 
     // Main loop
     while (!game_over_display) {
-        char buffer[BUFFER_SIZE];
-        int recv_size = zmq_recv(subscriber, buffer, sizeof(buffer) - 1, ZMQ_DONTWAIT);
-        if (recv_size != -1) {
-            buffer[recv_size] = '\0';
-            update_grid(buffer);
-        } else {
-            int err = zmq_errno();
-            if (err == EAGAIN) {
-                // No message received, continue
-            } else if (err == ETERM || err == ENOTSOCK) {
-                // The context was terminated or socket invalid, exit loop
-                break;
-            } else {
-                // Other errors, handle or log as needed
-                break;
-            }
-        }
-
+        pthread_mutex_lock(&display_lock);
         draw_grid();
+        pthread_mutex_unlock(&display_lock);
 
         usleep(50000); // 50ms delay
     }
 
     // Show victory screen if game_over flag is set
-    if (game_over_display) {
-        show_victory_screen();
-    } else {
-        // If game_over is not set, inform the user
-        clear();
-        mvprintw(GRID_HEIGHT / 2, (GRID_WIDTH / 2) - 12, "Connection lost. Press any key to exit...");
-        refresh();
-        getch();
-    }
-    
-    endwin();
+    show_victory_screen();
 }
