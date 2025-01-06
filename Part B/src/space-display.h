@@ -18,6 +18,8 @@
 
 #include <time.h>
 
+extern int game_over_display;
+
 /**
  * @brief Structure to represent a player in the display system.
  * 

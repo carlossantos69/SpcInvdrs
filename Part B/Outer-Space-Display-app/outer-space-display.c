@@ -14,40 +14,80 @@
  */
 
 #include <zmq.h>
+#include <pthread.h>
+#include <stdlib.h>
 #include <stdio.h>
+#include <ncurses.h>
 #include <unistd.h>
 #include "../src/config.h" 
 #include "../src/space-display.h" 
 
-/**
- * @brief Main function to initialize and run the Outer Space Display application.
- *
- * This function sets up the ZeroMQ context and subscriber socket, connects to the game server,
- * subscribes to all incoming messages, and starts the display. It also handles cleanup of
- * ZeroMQ resources before exiting.
- *
- * @return int Returns 0 on successful execution, or 1 if there is a failure in connecting to the server.
- */
-int main() {
+
+void *thread_display_routine(void *arg) {
+    // Avoid unused argument warning
+    (void)arg;
+
     // Initialize ZeroMQ sockets
     void* cont = zmq_ctx_new();
-    void* disp_sub = zmq_socket(cont, ZMQ_SUB);
+    void* sub = zmq_socket(cont, ZMQ_SUB);
 
     // Connect to server's PUB socket
-    if (zmq_connect(disp_sub, CLIENT_CONNECT_SUB) != 0) {
+    if (zmq_connect(sub, CLIENT_CONNECT_SUB) != 0) {
         perror("Failed to connect to game server");
-        return 1;
+        return NULL;
     }
 
     // Subscribe to all messages
-    zmq_setsockopt(disp_sub, ZMQ_SUBSCRIBE, "", 0);
+    zmq_setsockopt(sub, ZMQ_SUBSCRIBE, "", 0);
 
     // Start the display
-    display_main(disp_sub);
+    display_main(sub);
 
     // Close ZeroMQ sockets
-    zmq_close(disp_sub);
+    zmq_close(sub);
     zmq_ctx_destroy(cont);
     zmq_ctx_term(cont);
+
+    return NULL;
+}
+
+void *thread_input_routine(void *arg) {
+    // Avoid unused argument warning
+    (void)arg;
+
+    // TODO: In the future, when a new thread handles communication and data is in shared memory using mutex, this function can read game_over state and exit on any key press.
+
+    while (1) {
+        char ch;
+        ssize_t n = read(STDIN_FILENO, &ch, 1);
+        if (n > 0) {
+            if (ch == 'q' || ch == 'Q' || game_over_display) {
+                endwin();
+                exit(0);
+            }
+        }
+    }
+}
+
+
+
+int main() {
+    pthread_t thread_display;
+    pthread_t thread_input;
+    int ret;
+
+    ret = pthread_create(&thread_display, NULL, thread_display_routine, NULL);
+    if (ret != 0) {
+        perror("Failed to create thread_display");
+        return 1;
+    }
+    ret = pthread_create(&thread_input, NULL, thread_input_routine, NULL);
+    if (ret != 0) {
+        perror("Failed to create thread_input");
+        return 1;
+    }
+
+    pthread_join(thread_display, NULL);
+    pthread_join(thread_input, NULL);
     return 0;
 }

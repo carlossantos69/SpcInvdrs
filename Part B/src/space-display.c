@@ -53,7 +53,6 @@ void initialize_display() {
     curs_set(FALSE); // Hide the cursor
     cbreak();
     keypad(stdscr, TRUE);
-    nodelay(stdscr, TRUE); // Non-blocking input
     start_color();
 
     // Initialize color pairs
@@ -394,7 +393,6 @@ void show_victory_screen() {
     refresh();
 
     // Wait for user input to exit
-    nodelay(stdscr, FALSE);  // Make getch() blocking
     getch();
 }
 
@@ -436,12 +434,6 @@ void display_main(void* sub) {
         }
 
         draw_grid();
-
-        // Check for user input to exit
-        int ch = getch();
-        if (ch == 'q' || ch == 'Q') {
-            break;
-        }
 
         usleep(50000); // 50ms delay
     }
