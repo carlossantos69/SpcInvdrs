@@ -12,7 +12,7 @@ SRC_DIR = src
 ASTRONAUT_CLIENT_SRCS = $(ASTRONAUT_CLIENT_DIR)/astronaut-client.c
 GAME_SERVER_SRCS = $(GAME_SERVER_DIR)/game-server.c
 OUTER_SPACE_DISPLAY_SRCS = $(OUTER_SPACE_DISPLAY_DIR)/outer-space-display.c
-COMMON_SRCS = $(SRC_DIR)/game-logic.c $(SRC_DIR)/space-display.c
+COMMON_SRCS = $(SRC_DIR)/game-logic.c $(SRC_DIR)/space-display.c $(SRC_DIR)/client-logic.c
 
 # Object files
 ASTRONAUT_CLIENT_OBJS = $(ASTRONAUT_CLIENT_SRCS:.c=.o)
