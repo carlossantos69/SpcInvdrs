@@ -815,9 +815,7 @@ void send_game_over_state() {
  * @param publisher Pointer to the publisher socket.
  */
 void game_logic(void* responder, void* publisher) {
-    pthread_mutex_lock(&server_lock);
     initialize_game_state();
-    pthread_mutex_unlock(&server_lock);
 
     pub = publisher;
     resp = responder;
@@ -825,8 +823,6 @@ void game_logic(void* responder, void* publisher) {
     while (!game_over_server) {
         // Define safer buffer sizes
         char buffer[BUFFER_SIZE] = {0};
-
-        pthread_mutex_lock(&server_lock);
 
         // Receive messages with a maximum limit
         int recv_size = zmq_recv(responder, buffer, BUFFER_SIZE - 1, ZMQ_DONTWAIT);
@@ -844,8 +840,6 @@ void game_logic(void* responder, void* publisher) {
         
         // Update game state
         update_game_state();
-
-        pthread_mutex_unlock(&server_lock);
 
         // Send updated state to socket and update global state string
         send_game_state();
