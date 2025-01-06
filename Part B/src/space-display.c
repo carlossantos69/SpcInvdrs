@@ -281,9 +281,6 @@ void show_victory_screen() {
 
     // Refresh to display changes
     refresh();
-
-    // Wait for user input to exit
-    getch();
 }
 
 

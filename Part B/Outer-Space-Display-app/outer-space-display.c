@@ -27,6 +27,22 @@
 void* context;
 void* subscriber;
 
+
+/**
+ * @brief Cleans up resources used by the application.
+ * 
+ * This function closes the ZeroMQ subscriber, destroys the ZeroMQ context,
+ * terminates the ZeroMQ context, destroys the display mutex, and ends the
+ * ncurses window session.
+ */
+void cleanup() {
+    zmq_close(subscriber);
+    zmq_ctx_destroy(context);
+    zmq_ctx_term(context);
+    pthread_mutex_destroy(&display_lock);
+    endwin();
+}
+
 /**
  * @brief Updates the game grid and player statuses based on the provided update message.
  *
@@ -56,7 +72,6 @@ void update_grid(char* msg) {
     while (line != NULL) {
         if (line[0] == CMD_GAME_OVER) {
             game_over_display = 1; // Set a flag to indicate the game is over
-
 
         } else if (line[0] == CMD_PLAYER) {
             char id;
@@ -136,6 +151,7 @@ void *thread_comm_routine(void *arg) {
     // Connect to server's PUB socket
     if (zmq_connect(subscriber, CLIENT_CONNECT_SUB) != 0) {
         perror("Failed to connect to game server");
+        cleanup();
         exit(1);
     }
 
@@ -159,9 +175,11 @@ void *thread_comm_routine(void *arg) {
                 // No message received, continue
             } else if (err == ETERM || err == ENOTSOCK) {
                 // The context was terminated or socket invalid, exit program
+                cleanup();
                 exit(1);
             } else {
                 // Exit program on other errors
+                cleanup();
                 exit(1);
             }
         }
@@ -169,6 +187,7 @@ void *thread_comm_routine(void *arg) {
 
     // Note: no need to close the socket or context, as the cleanup function will handle it
 
+    // End thread
     pthread_exit(NULL);
 }
 
@@ -180,8 +199,8 @@ void *thread_display_routine(void *arg) {
     // Start the display
     display_main();
 
-    // Exit the program
-    exit(0);
+    // End thread
+    pthread_exit(NULL);
 }
 
 void *thread_input_routine(void *arg) {
@@ -196,30 +215,19 @@ void *thread_input_routine(void *arg) {
         if (n > 0) {
             if (ch == 'q' || ch == 'Q' || game_over_display) {
                 // Exit the program
+                cleanup();
                 exit(0);
             }
         }
     }
 }
 
-// Function to be called on exit
-void cleanup() {
-    // Destroy the mutex
-    zmq_close(subscriber);
-    zmq_ctx_destroy(context);
-    zmq_ctx_term(context);
-    pthread_mutex_destroy(&display_lock);
-    endwin();
-}
 
 int main() {
     pthread_t thread_comm;
     pthread_t thread_display;
     pthread_t thread_input;
     int ret;
-
-    // Register the cleanup function to be called at exit
-    atexit(cleanup);
 
     // Initialize the mutex
     if (pthread_mutex_init(&display_lock, NULL) != 0) {
@@ -262,6 +270,7 @@ int main() {
     pthread_join(thread_display, NULL);
     pthread_join(thread_input, NULL);
 
+    cleanup();
     exit(0);
 }
 
