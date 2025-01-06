@@ -27,6 +27,9 @@
 void* context;
 void* subscriber;
 
+// Flags to indicate thread ending
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+bool thread_display_finished = false;
 
 /**
  * @brief Cleans up resources used by the application.
@@ -40,104 +43,8 @@ void cleanup() {
     zmq_ctx_destroy(context);
     zmq_ctx_term(context);
     pthread_mutex_destroy(&display_lock);
+    pthread_mutex_destroy(&lock);
     endwin();
-}
-
-/**
- * @brief Updates the game grid and player statuses based on the provided update message.
- *
- * This function clears the current grid and player statuses, then parses the update message
- * to update the grid with new player positions, alien positions, laser beams, and player scores.
- * It also sets a flag if the game is over.
- *
- * @param msg A string containing the update information, with each line representing
- *            a different update command (e.g., player positions, alien positions, laser beams, scores).
- *
- * @note This function is not thread safe and a mutex must be locked before the function is called.
- */
-void update_grid(char* msg) {
-    // Clear the grid first
-    for (int y = 0; y < GRID_HEIGHT; y++) {
-        for (int x = 0; x < GRID_WIDTH; x++) {
-            grid[y][x].ch = ' ';
-        }
-    }
-
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        players_disp[i].active = 0;
-    }
-
-     // Parse the message line by line
-    char* line = strtok(msg, "\n");
-    while (line != NULL) {
-        if (line[0] == CMD_GAME_OVER) {
-            game_over_display = 1; // Set a flag to indicate the game is over
-
-        } else if (line[0] == CMD_PLAYER) {
-            char id;
-            int x, y;
-            sscanf(line, "%*c %c %d %d", &id, &x, &y);
-            
-            if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
-                grid[y][x].ch = id;
-                // Update player status
-                int idx = id - 'A';
-                if (idx >= 0 && idx < MAX_PLAYERS) {
-                    players_disp[idx].id = id;
-                    players_disp[idx].active = 1;
-                }
-            }
-        } else if (line[0] == CMD_ALIEN) {
-            // Format: ALIEN <x> <y>
-            int x, y;
-            sscanf(line, "%*c %d %d", &x, &y);
-            if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
-                grid[y][x].ch = '*'; // Represent aliens with '*'
-            }
-        } else if (line[0] == CMD_LASER) {
-            int x, y;
-            int zone;
-            sscanf(line, "%*c %d %d %d", &x, &y, &zone);
-            
-            time_t now = time(NULL);
-            
-            if (zone == ZONE_A || zone == ZONE_H) {
-                for (int i = x; i < GRID_WIDTH; i++) {
-                    grid[y][i].ch = LASER_HORIZONTAL;
-                    grid[y][i].laser_time = now;
-                }
-            } else if (zone == ZONE_D || zone == ZONE_F) {
-                for (int i = x; i >= 0; i--) {
-                    grid[y][i].ch = LASER_HORIZONTAL;
-                    grid[y][i].laser_time = now;
-                }
-            }
-            if (zone == ZONE_E || zone == ZONE_G) {
-                for (int i = y; i < GRID_HEIGHT; i++) {
-                    grid[i][x].ch = LASER_VERTICAL;
-                    grid[i][x].laser_time = now;
-                }
-            } else if (zone == ZONE_B || zone == ZONE_C) {
-                for (int i = y; i >= 0; i--) {
-                    grid[i][x].ch = LASER_VERTICAL;
-                    grid[i][x].laser_time = now;
-                }
-            }
-            
-        } else if (line[0] == CMD_SCORE) {
-            char id;
-            int player_score;
-            sscanf(line, "%*c %c %d", &id, &player_score);
-            
-            int idx = id - 'A';
-            if (idx >= 0 && idx < MAX_PLAYERS) {
-                players_disp[idx].active = 1;
-                players_disp[idx].score = player_score;
-            }
-        }
-        // Move to the next line
-        line = strtok(NULL, "\n");
-    }
 }
 
 void *thread_comm_routine(void *arg) {
@@ -159,15 +66,23 @@ void *thread_comm_routine(void *arg) {
     zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, "", 0);
 
     // Read messages from the server and update the display grid
-    while (!game_over_display) {
+    while (1) {
+        pthread_mutex_lock(&lock);
+        if (thread_display_finished) {
+            pthread_mutex_unlock(&lock);
+            break;
+        }
+        pthread_mutex_unlock(&lock);
+
+
         char buffer[BUFFER_SIZE];
         int recv_size = zmq_recv(subscriber, buffer, sizeof(buffer) - 1, ZMQ_DONTWAIT);
         if (recv_size != -1) {
             buffer[recv_size] = '\0';
-
-            // Update the game grid based on the received message
             pthread_mutex_lock(&display_lock);
-            update_grid(buffer);
+            // Copy the message to shared memory
+            // Note: this string defines the game state. state-display.c will parse it
+            strcpy(game_state_display, buffer);
             pthread_mutex_unlock(&display_lock);
         } else {
             int err = zmq_errno();
@@ -200,6 +115,9 @@ void *thread_display_routine(void *arg) {
     display_main();
 
     // End thread
+    pthread_mutex_lock(&lock);
+    thread_display_finished = true;
+    pthread_mutex_unlock(&lock);
     pthread_exit(NULL);
 }
 
@@ -207,17 +125,21 @@ void *thread_input_routine(void *arg) {
     // Avoid unused argument warning
     (void)arg;
 
-    // TODO: In the future, when a new thread handles communication and data is in shared memory using mutex, this function can read game_over state and exit on any key press.
-
     while (1) {
         char ch;
         ssize_t n = read(STDIN_FILENO, &ch, 1);
         if (n > 0) {
-            if (ch == 'q' || ch == 'Q' || game_over_display) {
+            if (ch == 'q' || ch == 'Q') {
                 // Exit the program
                 cleanup();
                 exit(0);
             }
+            pthread_mutex_lock(&lock);
+            if (thread_display_finished) {
+                cleanup();
+                exit(0);
+            }
+            pthread_mutex_unlock(&lock);
         }
     }
 }
@@ -233,19 +155,6 @@ int main() {
     if (pthread_mutex_init(&display_lock, NULL) != 0) {
         perror("Mutex init failed");
         return EXIT_FAILURE;
-    }
-
-    // Initialize grid to empty spaces
-    for (int y = 0; y < GRID_HEIGHT; y++) {
-        for (int x = 0; x < GRID_WIDTH; x++) {
-            grid[y][x].ch = ' ';
-        }
-    }
-
-    // Initialize player scores
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        players_disp[i].id = '\0';
-        players_disp[i].score = 0;
     }
 
     // Create the threads
@@ -273,5 +182,3 @@ int main() {
     cleanup();
     exit(0);
 }
-
-// TODO: use atexit() to destroy the mutex and do other stuff

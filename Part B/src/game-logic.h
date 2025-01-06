@@ -99,6 +99,12 @@ typedef struct {
     int active;
 } Alien_t;
 
+
+// Extern variables that will be used in other files
+extern int game_over_server;
+extern char game_state_server[BUFFER_SIZE];
+extern pthread_mutex_t server_lock;
+
 /**
  * @brief Finds a player by their unique ID.
  * 

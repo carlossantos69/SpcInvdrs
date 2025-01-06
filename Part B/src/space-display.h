@@ -51,12 +51,8 @@ typedef struct {
 } disp_Cell_t;
 
 
-extern disp_Player_t players_disp[MAX_PLAYERS];
-
-extern disp_Cell_t grid[GRID_HEIGHT][GRID_WIDTH];
-
-extern int game_over_display;
-
+// Extern variables that will be used in other files
+extern char game_state_display[BUFFER_SIZE];
 extern pthread_mutex_t display_lock;
 
 

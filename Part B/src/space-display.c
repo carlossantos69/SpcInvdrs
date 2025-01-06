@@ -30,8 +30,14 @@ disp_Cell_t grid[GRID_HEIGHT][GRID_WIDTH];
 // Flag indicating whether the game over display is active
 int game_over_display = 0;
 
+// This string is parsed to obtain the grid and player data
+//The game state string contains information about the game state, including player positions.
+//The string can either be passed from the server thread for the game-server.c application or
+//read via zeroMQ for outer-space-display.c. and astronaut-client.c applications.
+char game_state_display[BUFFER_SIZE];
+
 // Mutex for display data
-pthread_mutex_t display_lock;  // Mutex variable
+pthread_mutex_t display_lock;
 
 
 /**
@@ -54,6 +60,19 @@ void initialize_display() {
     cbreak();
     keypad(stdscr, TRUE);
     start_color();
+
+    // Initialize grid to empty spaces
+    for (int y = 0; y < GRID_HEIGHT; y++) {
+        for (int x = 0; x < GRID_WIDTH; x++) {
+            grid[y][x].ch = ' ';
+        }
+    }
+
+    // Initialize player scores
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        players_disp[i].id = '\0';
+        players_disp[i].score = 0;
+    }
 
     // Initialize color pairs
     init_pair(COLOR_ASTRONAUT, COLOR_GREEN, COLOR_BLACK);   // Astronauts
@@ -88,6 +107,102 @@ void initialize_display() {
     refresh();
 }
 
+/**
+ * @brief Updates the game grid and player statuses based on the current game state string.
+ *
+ * This function clears the current grid and player statuses, then parses the state string
+ * to update the grid with new player positions, alien positions, laser beams, and player scores.
+ * It also sets a flag if the game is over.
+ * 
+ *
+ * The game state string contains information about the game state, including player positions.
+ * The string can either be passed from the server thread for the game-server.c application or
+ * read via zeroMQ for outer-space-display.c. and astronaut-display-client.c applications.
+ */
+void update_grid() {
+    // Clear the grid first
+    for (int y = 0; y < GRID_HEIGHT; y++) {
+        for (int x = 0; x < GRID_WIDTH; x++) {
+            grid[y][x].ch = ' ';
+        }
+    }
+
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        players_disp[i].active = 0;
+    }
+
+     // Parse the message line by line
+    char* line = strtok(game_state_display, "\n");
+    while (line != NULL) {
+        if (line[0] == CMD_GAME_OVER) {
+            game_over_display = 1; // Set a flag to indicate the game is over
+
+        } else if (line[0] == CMD_PLAYER) {
+            char id;
+            int x, y;
+            sscanf(line, "%*c %c %d %d", &id, &x, &y);
+            
+            if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
+                grid[y][x].ch = id;
+                // Update player status
+                int idx = id - 'A';
+                if (idx >= 0 && idx < MAX_PLAYERS) {
+                    players_disp[idx].id = id;
+                    players_disp[idx].active = 1;
+                }
+            }
+        } else if (line[0] == CMD_ALIEN) {
+            // Format: ALIEN <x> <y>
+            int x, y;
+            sscanf(line, "%*c %d %d", &x, &y);
+            if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
+                grid[y][x].ch = '*'; // Represent aliens with '*'
+            }
+        } else if (line[0] == CMD_LASER) {
+            int x, y;
+            int zone;
+            sscanf(line, "%*c %d %d %d", &x, &y, &zone);
+            
+            time_t now = time(NULL);
+            
+            if (zone == ZONE_A || zone == ZONE_H) {
+                for (int i = x; i < GRID_WIDTH; i++) {
+                    grid[y][i].ch = LASER_HORIZONTAL;
+                    grid[y][i].laser_time = now;
+                }
+            } else if (zone == ZONE_D || zone == ZONE_F) {
+                for (int i = x; i >= 0; i--) {
+                    grid[y][i].ch = LASER_HORIZONTAL;
+                    grid[y][i].laser_time = now;
+                }
+            }
+            if (zone == ZONE_E || zone == ZONE_G) {
+                for (int i = y; i < GRID_HEIGHT; i++) {
+                    grid[i][x].ch = LASER_VERTICAL;
+                    grid[i][x].laser_time = now;
+                }
+            } else if (zone == ZONE_B || zone == ZONE_C) {
+                for (int i = y; i >= 0; i--) {
+                    grid[i][x].ch = LASER_VERTICAL;
+                    grid[i][x].laser_time = now;
+                }
+            }
+            
+        } else if (line[0] == CMD_SCORE) {
+            char id;
+            int player_score;
+            sscanf(line, "%*c %c %d", &id, &player_score);
+            
+            int idx = id - 'A';
+            if (idx >= 0 && idx < MAX_PLAYERS) {
+                players_disp[idx].active = 1;
+                players_disp[idx].score = player_score;
+            }
+        }
+        // Move to the next line
+        line = strtok(NULL, "\n");
+    }
+}
 
 /**
  * @brief Draws the scores of active players on the screen.
@@ -217,7 +332,6 @@ void draw_grid(void) {
     refresh();
 }
 
-
 /**
  * @brief Displays the victory screen at the end of the game.
  *
@@ -299,6 +413,7 @@ void display_main() {
     // Main loop
     while (!game_over_display) {
         pthread_mutex_lock(&display_lock);
+        update_grid();
         draw_grid();
         pthread_mutex_unlock(&display_lock);
 

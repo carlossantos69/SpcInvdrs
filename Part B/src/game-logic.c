@@ -16,20 +16,30 @@
 #include "game-logic.h"
 #include "config.h"
 #include <stdio.h>
+#include <pthread.h>
 
-void* responder;  // For REQ/REP with astronauts
-void* publisher;  // For PUB/SUB with display
+
+void* resp;  // For REQ/REP with astronauts
+void* pub;  // For PUB/SUB with display
 
 // Game state representation
 Player_t players[MAX_PLAYERS];
 Alien_t aliens[MAX_ALIENS];
 
 // Indicates whether the game is over (1) or not (0)
-int game_over = 0;
+int game_over_server = 0;
 
 // Stores the timestamp of the last alien update
 time_t last_alien_move = 0;
 
+// String to store the game state
+// It is parsed in the same way as the one passed in ZeroMQ publisher
+// thread_display_data_routine in main() reads and passes to display
+char game_state_server[BUFFER_SIZE];
+
+// Mutex for server data
+pthread_mutex_t server_lock;
+pthread_mutex_t server_alien_lock;
 
 /**
  * @brief Finds a player by their ID.
@@ -98,6 +108,8 @@ Player_t* find_by_zone(const char zone) {
  *
  * @param token A pointer to a character array where the generated 
  * token will be stored. The array must be at least 33 characters long.
+ *
+ * @note This function is not thread-safe. Ensure proper synchronization when calling it.
  */
 void generate_session_token(char* token) {
     const char charset[] = "abcdef0123456789";
@@ -172,6 +184,8 @@ int get_random_zone() {
  *
  * @param player Pointer to the Player_t structure to be cleared. If the pointer
  *               is NULL, the function returns immediately.
+ *
+ * @note This function is not thread-safe. Ensure proper synchronization when calling it.
  */
 void clear_player(Player_t *player) {
     if (player == NULL) return;
@@ -225,6 +239,7 @@ void initialize_game_state() {
         aliens[i].y = 5 + rand() % (GRID_HEIGHT - 10);
         aliens[i].active = 1;
     }
+
 }
 
 /**
@@ -294,7 +309,12 @@ void send_game_state() {
     }
 
     // Send the message
-    zmq_send(publisher, message, strlen(message), 0);
+    zmq_send(pub, message, strlen(message), 0);
+
+    // Update the game state string
+    pthread_mutex_lock(&server_lock);
+    strcpy(game_state_server, message);
+    pthread_mutex_unlock(&server_lock);
 }
 
 
@@ -365,6 +385,8 @@ int is_valid_move(Player_t* player, const char direction) {
  * position on the grid.
  *
  * @param player A pointer to the Player_t structure whose position is to be initialized.
+ *
+ * @note This function is not thread-safe. Ensure proper synchronization when calling it.
  */
 void initialize_player_position(Player_t* player) {
     switch(player->zone) {
@@ -445,10 +467,10 @@ void process_client_message(char* message, char* response) {
                     generate_session_token(players[i].session_token);
                     players[i].zone = get_random_zone();
                     initialize_player_position(&players[i]);
+
                     sprintf(response, "%d %c %s", RESP_OK, new_id, players[i].session_token);
                     //printf("New player %c initialized at (%d,%d) with session token %s\n",new_id, players[i].x, players[i].y, players[i].session_token);
 
-                    send_game_state();
                     return;
                 }
             }
@@ -560,12 +582,8 @@ void process_client_message(char* message, char* response) {
             sprintf(response, "%d", ERR_STUNNED);
             return;
         }
+
         player->last_fire_time = current_time;
-        if (player->laser.active) {
-            //ERROR Laser already active // ? IS IT EVER REACHED? BECAUSE LASER WOULD BE IN COOLDOWN
-            sprintf(response, "%d", ERR_LASER_COOLDOWN);
-            return;
-        }
 
         // Determine laser direction based on player's id
         if (player->zone == ZONE_A || player->zone == ZONE_H) {
@@ -584,17 +602,9 @@ void process_client_message(char* message, char* response) {
             player->laser.x = player->x;
         }
         
-
         // Initialize laser position
         player->laser.active = 1;
         player->laser.creation_time = current_time;
-
-        // Update game state
-        update_game_state();
-
-        // Send updated state to display
-        send_game_state();
-
         
         snprintf(response, BUFFER_SIZE, "%d %d", RESP_OK, player->score);
     } else if (cmd == CMD_DISCONNECT)  {
@@ -748,7 +758,7 @@ void update_game_state() {
 
     // Check if all aliens are destroyed
     if (all_aliens_destroyed()) {
-        game_over = 1; // Set a game over flag
+        game_over_server = 1; // Set a game over flag
     }
 }
 
@@ -786,7 +796,12 @@ void send_game_over_state() {
     
 
     // Send the message
-    zmq_send(publisher, message, strlen(message), 0);
+    zmq_send(pub, message, strlen(message), 0);
+
+    // Update the game state string
+    pthread_mutex_lock(&server_lock);
+    strcpy(game_state_server, message);
+    pthread_mutex_unlock(&server_lock);
 }
 
 /**
@@ -796,19 +811,22 @@ void send_game_over_state() {
  * client messages, updates the game state, and sends updates to the display.
  * The loop continues until the game is over.
  *
- * @param resp Pointer to the responder socket.
- * @param pub Pointer to the publisher socket.
+ * @param responder Pointer to the responder socket.
+ * @param publisher Pointer to the publisher socket.
  */
-void game_logic(void* resp, void* pub) {
+void game_logic(void* responder, void* publisher) {
+    pthread_mutex_lock(&server_lock);
     initialize_game_state();
-    printf("Game logic started\n");
+    pthread_mutex_unlock(&server_lock);
 
-    publisher = pub;
-    responder = resp;
+    pub = publisher;
+    resp = responder;
 
-    while (!game_over) {
+    while (!game_over_server) {
         // Define safer buffer sizes
         char buffer[BUFFER_SIZE] = {0};
+
+        pthread_mutex_lock(&server_lock);
 
         // Receive messages with a maximum limit
         int recv_size = zmq_recv(responder, buffer, BUFFER_SIZE - 1, ZMQ_DONTWAIT);
@@ -816,18 +834,20 @@ void game_logic(void* resp, void* pub) {
             buffer[recv_size] = '\0';
             char response[BUFFER_SIZE];
             process_client_message(buffer, response);
-            zmq_send(responder, response, strlen(response), 0);
+            zmq_send(resp, response, strlen(response), 0);
         } else if (recv_size >= BUFFER_SIZE) {
             // Message too long, possible overflow attempt
             //char response[] = "ERROR Message too long";
             char response = ERR_TOLONG;
-            zmq_send(responder, &response, sizeof(response), 0);
+            zmq_send(resp, &response, sizeof(response), 0);
         }
         
         // Update game state
         update_game_state();
 
-        // Send updated state to display
+        pthread_mutex_unlock(&server_lock);
+
+        // Send updated state to socket and update global state string
         send_game_state();
         
         usleep(50000); // 50ms delay
