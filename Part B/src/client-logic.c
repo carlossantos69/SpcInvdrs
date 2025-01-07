@@ -85,6 +85,15 @@ void find_error(int code, char *msg) {
 }
 
 
+/**
+ * @brief Sends a connect message to the server and processes the response.
+ *
+ * This function sends a connect message using ZeroMQ, waits for the server's response,
+ * and processes it. 
+ * It then sends a message to the ncurses thread with the appropriate text to display.
+ * 
+ * In case of a receive error, it terminates the program.
+ */
 void send_connect_message() {
     // Send connect message
     char msg[2];
@@ -137,6 +146,15 @@ void send_connect_message() {
 
 
 
+/**
+ * @brief Handles user key input and communicates with the server.
+ *
+ * This function waits for the text output to be displayed, marks the input as ready,
+ * and processes the user input based on the key pressed. It sends the appropriate
+ * command to the server using ZeroMQ and updates the player's score based on the server's response.
+ * 
+ * If the input is 'q' or 'Q', it disconnects the client and exits the program.
+ */
 void handle_key_input() {
     // Wait for text output to be displayed
     // This is necessary to prevent locking in getch() without displaying the output first
@@ -245,7 +263,7 @@ void client_main(void* requester) {
     // Send connect message and receive player ID
     send_connect_message();
     
-    // Main game loop
+    // Main client loop
     while(1) {
         handle_key_input();
         usleep(10000); // 10ms delay to prevent busy waiting
