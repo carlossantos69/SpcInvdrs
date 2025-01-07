@@ -17,7 +17,15 @@
 #ifndef CLIENT_LOGIC_H
 #define CLIENT_LOGIC_H
 
+// Extern variables that will be used in other files
 
-void client_main(void* req);
+extern int input_buffer;
+extern char output_buffer_line1[BUFFER_SIZE];
+extern char output_buffer_line2[BUFFER_SIZE];
+extern int input_ready;
+extern int output_ready;
+extern pthread_mutex_t ncurses_lock;
+
+void client_main(void* requester);
 
 #endif

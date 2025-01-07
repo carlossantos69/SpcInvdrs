@@ -13,8 +13,9 @@
  * Logic for the client code.
  */
 
-#include <ncurses.h>
 #include <zmq.h>
+#include <pthread.h>
+#include <ncurses.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,7 +24,15 @@
 #include "client-logic.h"
 
 // ZeroMQ socket
-void* requester;
+void* req;
+
+// Ncurses buffers and flags
+int input_buffer;
+char output_buffer_line1[BUFFER_SIZE];
+char output_buffer_line2[BUFFER_SIZE];
+int input_ready = 0; // 1 if client is ready to receive keypress input
+int output_ready = 0; // 1 if client has output to display
+pthread_mutex_t ncurses_lock = PTHREAD_MUTEX_INITIALIZER;
 
 // Client state
 char player_id = '\0';
@@ -76,160 +85,162 @@ void find_error(int code, char *msg) {
 }
 
 
-/**
- * @brief Sends a connect message to the server and handles the response.
- * 
- * This function sends a connect message to the server using ZeroMQ, waits for the response,
- * and processes it. If the response indicates an error, it displays the error message and exits.
- * Otherwise, it initializes the display with the player ID and session token.
- */
 void send_connect_message() {
+    // Send connect message
     char msg[2];
     msg[0] = CMD_CONNECT;
     msg[1] = '\n';
-    zmq_send(requester, msg, strlen(msg), 0);
+    zmq_send(req, msg, strlen(msg), 0);
 
     // Receive response from server
     char buffer[BUFFER_SIZE];
     int response = ERR_UNKNOWN_CMD;
-    int recv_size = zmq_recv(requester, buffer, sizeof(buffer) - 1, 0);
+    int recv_size = zmq_recv(req, buffer, sizeof(buffer) - 1, 0);
     if (recv_size != -1) {
         buffer[recv_size] = '\0';
-        
+
+        // Process response
         if (sscanf(buffer, "%d %c %32s", &response, &player_id, session_token) == 3) {
 
             // Check is status is error
             if (response != RESP_OK) {
-                char error_msg[BUFFER_SIZE];
-                find_error(response, error_msg);
-                // Clear screen and display error
-                clear();
-                mvprintw(LINES/2, (COLS-strlen(buffer))/2, "%s", buffer);
-                mvprintw(LINES/2 + 1, (COLS-35)/2, "%s", error_msg);
-                refresh();
-                
-                // Wait for keypress before exiting
-                nodelay(stdscr, FALSE);  // Make getch() blocking
-                getch();
-                
-                // Clean up and exit gracefully
-                endwin();
-                zmq_close(requester);
-                //zmq_ctx_destroy(context);  //TODO: when data is shared with mutex this will work again
-                exit(0);
+                // Parse error
+                char error_msg[BUFFER_SIZE-10];
+
+                // Send error message to ncurses thread
+                pthread_mutex_lock(&ncurses_lock);
+                sprintf(output_buffer_line1, "Error: %s", error_msg);
+                sprintf(output_buffer_line2, " ");
+                output_ready = 1;
+                pthread_mutex_unlock(&ncurses_lock);
+
+
+                // TODO: Decide if this is the correct way to handle this
+                return;
             } 
 
-            // Initialize display with player ID and session token
-            move(0, 0);
-            clrtoeol();
-            mvprintw(0, 0, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", 
-                    player_id, player_score);
-            move(2, 0);
-            clrtoeol(); 
-            refresh();
-        
+            // Send success message to ncurses thread
+            pthread_mutex_lock(&ncurses_lock);
+            sprintf(output_buffer_line1, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", player_id, player_score);
+            sprintf(output_buffer_line2, " ");
+            output_ready = 1;
+            pthread_mutex_unlock(&ncurses_lock);
+
         }
+
     } else {
-        perror("Failed to receive player ID");
+        // TODO: Decide if this is the correct way to handle this
         endwin();
-        zmq_close(requester);
-        //zmq_ctx_destroy(context); //TODO: when data is shared with mutex this will work again
         exit(1);
     }
 }
 
 
-/**
- * @brief Handles key input from the user and sends appropriate commands to the server.
- * 
- * This function captures key presses and sends corresponding commands to the server
- * using ZeroMQ. It handles movement commands (arrow keys), a zap command (space bar),
- * and a disconnect command ('q' or 'Q'). It also processes the server's response to
- * update the player's score and display status messages.
- */
-void handle_key_input() {
-    int ch = getch();
-    if (ch == ERR) return; // No key pressed
 
+void handle_key_input() {
+    // Wait for text output to be displayed
+    // This is necessary to prevent locking in getch() without displaying the output first
+    while(1) {
+        pthread_mutex_lock(&ncurses_lock);
+        if (output_ready == 0) {
+            break;
+        }
+        pthread_mutex_unlock(&ncurses_lock);
+    }
+
+
+    // Mark input as ready
+    input_ready = 1;
+    pthread_mutex_unlock(&ncurses_lock);
+
+
+    // Lock until ncurse thread sends input
+    while(1) {
+        pthread_mutex_lock(&ncurses_lock);
+
+        if (input_ready == 0) {
+            break;
+        }
+        pthread_mutex_unlock(&ncurses_lock);
+    }
+
+    // Process user input
     char buffer[BUFFER_SIZE];
-    switch (ch) {
+    switch (input_buffer) {
         case KEY_UP:
             snprintf(buffer, sizeof(buffer), "%c %c %s %c", CMD_MOVE, player_id, session_token, MOVE_UP);
-            zmq_send(requester, buffer, strlen(buffer), 0);
+            zmq_send(req, buffer, strlen(buffer), 0);
             break;
         case KEY_DOWN:
             snprintf(buffer, sizeof(buffer), "%c %c %s %c", CMD_MOVE, player_id, session_token, MOVE_DOWN);
-            zmq_send(requester, buffer, strlen(buffer), 0);
+            zmq_send(req, buffer, strlen(buffer), 0);
             break;
         case KEY_LEFT:
             snprintf(buffer, sizeof(buffer), "%c %c %s %c", CMD_MOVE, player_id, session_token, MOVE_LEFT);
-            zmq_send(requester, buffer, strlen(buffer), 0);
+            zmq_send(req, buffer, strlen(buffer), 0);
             break;
         case KEY_RIGHT:
             snprintf(buffer, sizeof(buffer), "%c %c %s %c", CMD_MOVE, player_id, session_token, MOVE_RIGHT);
-            zmq_send(requester, buffer, strlen(buffer), 0);
+            zmq_send(req, buffer, strlen(buffer), 0);
             break;
         case ' ':
             snprintf(buffer, sizeof(buffer), "%c %c %s", MSG_ZAP, player_id, session_token);
-            zmq_send(requester, buffer, strlen(buffer), 0);
+            zmq_send(req, buffer, strlen(buffer), 0);
             break;
         case 'q':
         case 'Q':
             snprintf(buffer, sizeof(buffer), "%c %c %s", CMD_DISCONNECT, player_id, session_token);
-            zmq_send(requester, buffer, strlen(buffer), 0);
-            // Clean up and exit
+            zmq_send(req, buffer, strlen(buffer), 0);
             endwin();
-            zmq_close(requester);
-            //zmq_ctx_destroy(context);  //TODO: when data is shared with mutex this will work again
-            exit(0);
+            exit(0); // TODO: Decide if this is the correct way to handle this
             break;
         default:
             // Ignore other keys
             return;
     }
 
+    pthread_mutex_unlock(&ncurses_lock);
+
     // Receive response from the server
-    int recv_size = zmq_recv(requester, buffer, sizeof(buffer) - 1, 0);
+    int recv_size = zmq_recv(req, buffer, sizeof(buffer) - 1, 0);
     if (recv_size != -1) {
         buffer[recv_size] = '\0';
         
-        // Parse response to get status and score
         int response;
         int new_score;
         if (sscanf(buffer, "%d %d", &response, &new_score) >= 1) {
+            player_score = new_score;
             if (response != RESP_OK) {
-                char error_msg[BUFFER_SIZE];
+                // Parse error
+                char error_msg[BUFFER_SIZE-25];
                 find_error(response, error_msg);
-                mvprintw(2, 0, "Last action failed. %s", error_msg);
-                refresh();
+
+                // Send error message to ncurses thread
+                pthread_mutex_lock(&ncurses_lock);
+                sprintf(output_buffer_line1, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", player_id, player_score);
+                sprintf(output_buffer_line2, "Last action failed: %s ", error_msg);
+                output_ready = 1;
+                pthread_mutex_unlock(&ncurses_lock);
                 return;
             }
-            player_score = new_score;
 
-            // Update display
-            move(0, 0);
-            clrtoeol();
-            mvprintw(0, 0, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", 
-                     player_id, player_score);
-            // Clear error line
-            move(2, 0);
-            clrtoeol();   
-            refresh();
+            // Send new text to ncurses thread
+            pthread_mutex_lock(&ncurses_lock);
+            sprintf(output_buffer_line1, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", player_id, player_score);
+            sprintf(output_buffer_line2, " ");
+            output_ready = 1;
+            pthread_mutex_unlock(&ncurses_lock);
         }
+
+
     } else {
         perror("Failed to receive response from server");
-    }
+    } 
 }
 
-void client_main(void* req) {
-    // Initialize ncurses
-    initscr();
-    noecho();
-    cbreak();
-    keypad(stdscr, TRUE);
+void client_main(void* requester) {
 
-    // Store ZeroMQ socket
-    requester = req;
+    req = requester;
 
     // Send connect message and receive player ID
     send_connect_message();
@@ -240,6 +251,4 @@ void client_main(void* req) {
         usleep(10000); // 10ms delay to prevent busy waiting
     }
 
-    // Cleanup
-    endwin();
 }

@@ -10,18 +10,96 @@
  * Group ID: 20
  *
  * Description:
- * Code that handles game server application.
+ * Code that handles astronaut client application.
  */
 
 
-#include <ncurses.h>
 #include <zmq.h>
+#include <pthread.h>
+#include <ncurses.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include "../src/config.h"
 #include "../src/client-logic.h"
+
+// ZeroMQ socket
+void* context;
+void* requester;
+
+void cleanup() {
+    zmq_close(requester);
+    zmq_ctx_destroy(context);
+    zmq_ctx_term(context);
+    endwin();
+}
+
+void *thread_client_routine(void *arg) {
+    // Avoid unused argument warning
+    (void)arg;
+
+    // Start the client
+    client_main(requester);
+
+    // Kill the program
+    cleanup();
+    exit(0);
+}
+
+void *thread_ncurses_routine(void *arg) {
+    // Avoid unused argument warning
+    (void)arg;
+
+    // Initialize ncurses
+    initscr();
+    noecho();
+    cbreak();
+    keypad(stdscr, TRUE);
+
+
+    while(1) {
+        pthread_mutex_lock(&ncurses_lock);
+
+        if (input_ready) {
+            // Read char from user
+            int ch = getch();
+            if (ch == ERR) { // No key pressed
+                // TODO: Decide if this is the correct way to handle this
+                cleanup();
+                exit(1);
+
+            };
+
+            input_buffer = ch;
+            input_ready = 0;
+        }
+        if (output_ready) {
+            // Update display
+
+            // Update line 1
+            move(0, 0);
+            clrtoeol();
+            mvprintw(0, 0, "%s", output_buffer_line1);
+
+            // Line 2
+            move(2, 0);
+            clrtoeol();
+            mvprintw(2, 0, "%s", output_buffer_line2);
+            refresh();
+
+            output_ready = 0;
+        }
+
+        pthread_mutex_unlock(&ncurses_lock);
+    }
+
+
+    // Exit thread
+    // Note: program should not reach this point, as other threads will manage program exit
+    pthread_exit(NULL);
+}
+
 
 /**
  * @brief Main function for the astronaut client application.
@@ -34,25 +112,37 @@
  */
 int main() {
     // Initialize ZeroMQ
-    void* context = zmq_ctx_new();
-    void* requester = zmq_socket(context, ZMQ_REQ);
+    context = zmq_ctx_new();
+    requester = zmq_socket(context, ZMQ_REQ);
     
     // Connect to server's REQ/REP socket
     if (zmq_connect(requester, CLIENT_CONNECT_REQ) != 0) {
-        perror("Failed to connect to server");
-        endwin();
-        zmq_close(requester);
-        zmq_ctx_destroy(context);
+        cleanup();
         exit(1);
     }
 
-    // Start the client
-    client_main(requester);
+    // Create threads
+    //pthread_t thread_input; // TODO: remove if not used
+    pthread_t thread_client;
+    pthread_t thread_ncurses;
+    int ret;
 
-    // Close ZeroMQ sockets
-    zmq_close(requester);
-    zmq_ctx_destroy(context);
-    zmq_ctx_term(context);
+    ret = pthread_create(&thread_client, NULL, thread_client_routine, NULL);
+    if (ret != 0) {
+        perror("Failed to create thread_client");
+        return 1;
+    }
+    ret = pthread_create(&thread_ncurses, NULL, thread_ncurses_routine, NULL);
+    if (ret != 0) {
+        perror("Failed to create thread_ncurses");
+        return 1;
+    }
 
-    return 0;
+    // Wait for threads to finish
+    // Note: program should not reach this point, as threads will manage program exit
+    pthread_join(thread_client, NULL);
+    pthread_join(thread_ncurses, NULL);
+
+    cleanup();
+    exit(0);
 }
