@@ -16,6 +16,7 @@
 #include "game-logic.h"
 #include "config.h"
 #include <stdio.h>
+#include <sys/time.h>
 #include <pthread.h>
 
 
@@ -30,7 +31,7 @@ Alien_t aliens[MAX_ALIENS];
 int game_over_server = 0;
 
 // Stores the timestamp of the last alien update
-time_t last_alien_move = 0;
+double last_alien_move = 0;
 
 // String to store the game state
 // It is parsed in the same way as the one passed in ZeroMQ publisher
@@ -40,6 +41,37 @@ char game_state_server[BUFFER_SIZE];
 // Mutex for server data
 pthread_mutex_t server_lock;
 pthread_mutex_t server_alien_lock;
+
+
+/**
+ * @brief Returns the number of seconds since the epoch as a double.
+ *
+ * This function uses the gettimeofday function to get the current time
+ * and returns the number of seconds since the epoch (January 1, 1970)
+ * as a double.
+ *
+ * @return The number of seconds since the epoch as a double.
+ */
+double get_time_in_seconds() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (double)tv.tv_sec + (double)tv.tv_usec / 1000000.0f;
+}
+
+/**
+ * @brief Checks if the specified duration has passed since the given time.
+ *
+ * This function compares the current time with the given time and returns 1
+ * if the difference is greater than or equal to the specified duration.
+ *
+ * @param start_time The start time in seconds since the epoch.
+ * @param duration The duration to check in seconds.
+ * @return int Returns 1 if the duration has passed, 0 otherwise.
+ */
+int has_duration_passed(double start_time, double duration) {
+    double current_time = get_time_in_seconds();
+    return (current_time - start_time) >= duration ? 1 : 0;
+}
 
 /**
  * @brief Finds a player by their ID.
@@ -192,8 +224,8 @@ void clear_player(Player_t *player) {
 
     player->id = '\0';
     player->score = 0;
-    player->last_fire_time = 0;
-    player->last_stun_time = 0;
+    player->last_fire_time = 0.0;
+    player->last_stun_time = 0.0;
     player->session_token[0] = '\0';
     player->laser.active = 0; 
 }
@@ -538,7 +570,6 @@ void process_client_message(char* message, char* response) {
 
     // Command handling with checks
     if (cmd == CMD_MOVE) {
-        time_t current_time = time(NULL);
         char direction;
         if (sscanf(message, "%*c %*c %*s %c", &direction) != 1) {
             //ERROR Invalid MOVE command format
@@ -546,7 +577,7 @@ void process_client_message(char* message, char* response) {
             return;
         }
 
-        if (difftime(current_time, player->last_stun_time) < STUN_DURATION) {
+        if (!has_duration_passed(player->last_stun_time, STUN_DURATION)) {
             //ERROR Player stunned
             sprintf(response, "%d", ERR_STUNNED);
             return;
@@ -571,13 +602,13 @@ void process_client_message(char* message, char* response) {
             return;
         }
     } else if (cmd == MSG_ZAP)  {
-        time_t current_time = time(NULL);
-        if (difftime(current_time, player->last_fire_time) < LASER_COOLDOWN) {
+        double current_time = get_time_in_seconds();
+        if (!has_duration_passed(player->last_fire_time, LASER_COOLDOWN)) {
             //ERROR Laser cooldown
             sprintf(response, "%d", ERR_LASER_COOLDOWN);
             return;
         }
-        if (difftime(current_time, player->last_stun_time) < STUN_DURATION) {
+        if (!has_duration_passed(player->last_stun_time, STUN_DURATION)) {
             //ERROR Player stunned
             sprintf(response, "%d", ERR_STUNNED);
             return;
@@ -695,10 +726,10 @@ void check_laser_collisions() {
  * the last move time accordingly.
  */
 void update_alien_positions() {
-    time_t current_time = time(NULL);
+    double current_time = get_time_in_seconds();
     
     // Only move aliens if 1 second has passed since last move
-    if (current_time - last_alien_move >= ALIEN_MOVE_INTERVAL) {
+    if (has_duration_passed(last_alien_move, ALIEN_MOVE_INTERVAL)) {
         for (int i = 0; i < MAX_ALIENS; i++) {
             if (aliens[i].active) {
                 int direction = rand() % 4;
@@ -741,17 +772,15 @@ void update_alien_positions() {
  *        - Checks if all aliens are destroyed and sets the game over flag if true.
  */
 void update_game_state() {
-    time_t current_time = time(NULL);
-    
     // Update alien positions
     update_alien_positions();
     
     // Check laser collisions and update scores
     check_laser_collisions();
     
-    // Deactivate lasers after LASER_DURATION seconds
+    // Deactivate lasers after LASER_DURATION seconds 
     for (int i = 0; i < MAX_PLAYERS; ++i) {
-        if (players[i].laser.active && difftime(current_time, players[i].laser.creation_time) >= LASER_DURATION) {
+        if (players[i].laser.active && has_duration_passed(players[i].laser.creation_time, LASER_DURATION)) {
             players[i].laser.active = 0;
         }
     }

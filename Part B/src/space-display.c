@@ -18,7 +18,6 @@
 #include <unistd.h>
 #include "config.h"
 #include "space-display.h"
-#include <time.h>
 #include <string.h>
 
 // Array to store the display information of players
@@ -163,28 +162,22 @@ void update_grid() {
             int zone;
             sscanf(line, "%*c %d %d %d", &x, &y, &zone);
             
-            time_t now = time(NULL);
-            
             if (zone == ZONE_A || zone == ZONE_H) {
                 for (int i = x; i < GRID_WIDTH; i++) {
                     grid[y][i].ch = LASER_HORIZONTAL;
-                    grid[y][i].laser_time = now;
                 }
             } else if (zone == ZONE_D || zone == ZONE_F) {
                 for (int i = x; i >= 0; i--) {
                     grid[y][i].ch = LASER_HORIZONTAL;
-                    grid[y][i].laser_time = now;
                 }
             }
             if (zone == ZONE_E || zone == ZONE_G) {
                 for (int i = y; i < GRID_HEIGHT; i++) {
                     grid[i][x].ch = LASER_VERTICAL;
-                    grid[i][x].laser_time = now;
                 }
             } else if (zone == ZONE_B || zone == ZONE_C) {
                 for (int i = y; i >= 0; i--) {
                     grid[i][x].ch = LASER_VERTICAL;
-                    grid[i][x].laser_time = now;
                 }
             }
             
@@ -279,29 +272,14 @@ void draw_scores() {
  * - Astronauts (characters 'A' to 'H') with a specific color.
  * - Empty cells as spaces.
  *
- * Lasers are cleared after a specified display time.
  * The function also draws the scores and refreshes the screen.
  */
 void draw_grid(void) {
-    time_t now = time(NULL);
-    double elapsed;
-    
     for (int y = 0; y < GRID_HEIGHT; y++) {
         for (int x = 0; x < GRID_WIDTH; x++) {
             char ch = grid[y][x].ch;
             int display_y = y + 3;
             int display_x = x + 4;
-
-            // Clear lasers after LASER_DURATION
-            if ((ch == LASER_HORIZONTAL || ch == LASER_VERTICAL) && grid[y][x].laser_time > 0) {
-                elapsed = difftime(now, grid[y][x].laser_time);
-                if (elapsed >= LASER_DURATION) {
-                    grid[y][x].ch = ' ';
-                    grid[y][x].laser_time = 0;
-                    mvaddch(display_y, display_x, ' ');
-                    continue;
-                }
-            }
 
             if (ch == '*') {
                 // Draw alien

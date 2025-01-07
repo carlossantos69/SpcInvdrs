@@ -16,8 +16,6 @@
 #ifndef SPACE_DISPLAY_H
 #define SPACE_DISPLAY_H
 
-#include <time.h>
-
 /**
  * @brief Structure to represent a player in the display system.
  * 
@@ -36,18 +34,15 @@ typedef struct {
  * @brief Represents a cell in the display grid.
  *
  * This structure is used to represent a single cell in the display grid.
- * Each cell contains a character and a timestamp indicating when a laser
+ * Each cell contains a character
  * was drawn in that cell.
  *
  * @var disp_Cell_t::ch
  * Character representing the content of the cell.
  *
- * @var disp_Cell_t::laser_time
- * Timestamp indicating when the laser was drawn in the cell.
  */
 typedef struct {
     char ch;
-    time_t laser_time; // Timestamp when the laser was drawn
 } disp_Cell_t;
 
 

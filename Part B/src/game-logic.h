@@ -20,7 +20,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
 #include <zmq.h>
 #include <ctype.h>
@@ -39,7 +38,7 @@ typedef struct {
     int x;
     int y;
     int active;
-    time_t creation_time; 
+    double creation_time; // Seconds since epoch with microsecond precision
 } Laser_t;
 
 /**
@@ -65,10 +64,10 @@ typedef struct {
  * The current score of the player.
  *
  * @var Player_t::last_fire_time
- * The timestamp of the last time the player fired their weapon.
+ * The timestamp of the last time the player fired their weapon. Seconds since epoch with microsecond precision 
  *
  * @var Player_t::last_stun_time
- * The timestamp of the last time the player was stunned.
+ * The timestamp of the last time the player was stunned. Seconds since epoch with microsecond precision
  *
  * @var Player_t::session_token
  * A 32-character hexadecimal session token used to identify the player's session.
@@ -82,8 +81,8 @@ typedef struct {
     int x;
     int y;
     int score;
-    time_t last_fire_time;
-    time_t last_stun_time;
+    double last_fire_time; // Seconds since epoch with microsecond precision
+    double last_stun_time; // Seconds since epoch with microsecond precision
     char session_token[33]; // 32-char hex token + null terminator
     Laser_t laser; //The laser of the player 
 } Player_t;
@@ -104,6 +103,29 @@ typedef struct {
 extern int game_over_server;
 extern char game_state_server[BUFFER_SIZE];
 extern pthread_mutex_t server_lock;
+
+/**
+ * @brief Returns the number of seconds since the epoch as a double.
+ *
+ * This function uses the gettimeofday function to get the current time
+ * and returns the number of seconds since the epoch (January 1, 1970)
+ * as a double.
+ *
+ * @return The number of seconds since the epoch as a double.
+ */
+double get_time_in_seconds();
+
+/**
+ * @brief Checks if the specified duration has passed since the given time.
+ *
+ * This function compares the current time with the given time and returns 1
+ * if the difference is greater than or equal to the specified duration.
+ *
+ * @param start_time The start time in seconds since the epoch.
+ * @param duration The duration to check in seconds.
+ * @return int Returns 1 if the duration has passed, 0 otherwise.
+ */
+int has_duration_passed(double start_time, double duration);
 
 /**
  * @brief Finds a player by their unique ID.
