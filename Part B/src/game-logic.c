@@ -637,6 +637,10 @@ void process_client_message(char* message, char* response) {
         player->laser.active = 1;
         player->laser.creation_time = current_time;
         
+        // Reply to client with score
+        // Note: we update the game state here but in this tick it will also update later
+        // This is done so the client as an updated score as the response
+        update_game_state();
         snprintf(response, BUFFER_SIZE, "%d %d", RESP_OK, player->score);
     } else if (cmd == CMD_DISCONNECT)  {
         clear_player(player);
