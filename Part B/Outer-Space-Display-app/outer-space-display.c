@@ -51,20 +51,6 @@ void *thread_comm_routine(void *arg) {
     // Avoid unused argument warning
     (void)arg;
 
-    // Initialize the ZeroMQ context and subscriber socket
-    context = zmq_ctx_new();
-    subscriber = zmq_socket(context, ZMQ_SUB);
-
-    // Connect to server's PUB socket
-    if (zmq_connect(subscriber, CLIENT_CONNECT_SUB) != 0) {
-        perror("Failed to connect to game server");
-        cleanup();
-        exit(1);
-    }
-
-    // Subscribe to all messages
-    zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, "", 0);
-
     // Read messages from the server and update the display grid
     while (1) {
         pthread_mutex_lock(&lock);
@@ -150,6 +136,20 @@ int main() {
     pthread_t thread_display;
     pthread_t thread_input;
     int ret;
+
+    // Initialize ZeroMQ
+    context = zmq_ctx_new();
+    subscriber = zmq_socket(context, ZMQ_SUB);
+
+    // Connect to server's PUB socket
+    if (zmq_connect(subscriber, CLIENT_CONNECT_SUB) != 0) {
+        perror("Failed to connect to game server");
+        cleanup();
+        exit(1);
+    }
+
+    // Subscribe to all messages
+    zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, "", 0);
 
     // Initialize the mutex
     if (pthread_mutex_init(&display_lock, NULL) != 0) {
