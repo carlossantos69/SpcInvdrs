@@ -573,20 +573,20 @@ void process_client_message(char* message, char* response) {
         char direction;
         if (sscanf(message, "%*c %*c %*s %c", &direction) != 1) {
             //ERROR Invalid MOVE command format
-            sprintf(response, "%d", ERR_INVALID_MOVE);
+            sprintf(response, "%d %d", ERR_INVALID_MOVE, player->score);
             return;
         }
 
         if (!has_duration_passed(player->last_stun_time, STUN_DURATION)) {
             //ERROR Player stunned
-            sprintf(response, "%d", ERR_STUNNED);
+            sprintf(response, "%d %d", ERR_STUNNED, player->score);
             return;
         }
 
         // Validate direction
         if (direction != MOVE_UP && direction != MOVE_DOWN && direction != MOVE_LEFT && direction != MOVE_RIGHT) {
             //ERROR Invalid direction
-            sprintf(response, "%d", ERR_INVALID_DIR);
+            sprintf(response, "%d %d", ERR_INVALID_DIR, player->score);
             return;
         }
 
@@ -598,19 +598,19 @@ void process_client_message(char* message, char* response) {
             snprintf(response, BUFFER_SIZE, "%d %d", RESP_OK, player->score);
         } else {
             //ERROR Invalid move direction
-            sprintf(response, "%d", ERR_INVALID_MOVE);
+            sprintf(response, "%d %d", ERR_INVALID_MOVE, player->score);
             return;
         }
     } else if (cmd == MSG_ZAP)  {
         double current_time = get_time_in_seconds();
         if (!has_duration_passed(player->last_fire_time, LASER_COOLDOWN)) {
             //ERROR Laser cooldown
-            sprintf(response, "%d", ERR_LASER_COOLDOWN);
+            sprintf(response, "%d %d", ERR_LASER_COOLDOWN, player->score);
             return;
         }
         if (!has_duration_passed(player->last_stun_time, STUN_DURATION)) {
             //ERROR Player stunned
-            sprintf(response, "%d", ERR_STUNNED);
+            sprintf(response, "%d %d", ERR_STUNNED, player->score);
             return;
         }
 
