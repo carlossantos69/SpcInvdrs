@@ -64,11 +64,8 @@ void *thread_ncurses_routine(void *arg) {
         if (input_ready) {
             // Read char from user
             int ch = getch();
-            if (ch == ERR) { // No key pressed
-                // TODO: Decide if this is the correct way to handle this
-                cleanup();
-                exit(1);
-
+            if (ch != ERR) { // No key pressed
+                ch = 'q'; // Tell the client to quit
             };
 
             input_buffer = ch;
@@ -122,7 +119,6 @@ int main() {
     }
 
     // Create threads
-    //pthread_t thread_input; // TODO: remove if not used
     pthread_t thread_client;
     pthread_t thread_ncurses;
     int ret;

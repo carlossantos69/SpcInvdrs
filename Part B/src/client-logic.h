@@ -18,7 +18,6 @@
 #define CLIENT_LOGIC_H
 
 // Extern variables that will be used in other files
-
 extern int input_buffer;
 extern char output_buffer_line1[BUFFER_SIZE];
 extern char output_buffer_line2[BUFFER_SIZE];

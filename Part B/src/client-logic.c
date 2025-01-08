@@ -92,9 +92,9 @@ void find_error(int code, char *msg) {
  * and processes it. 
  * It then sends a message to the ncurses thread with the appropriate text to display.
  * 
- * In case of a receive error, it terminates the program.
+ * Returns 0 if the connection was successful, or -1 if an error occurred.
  */
-void send_connect_message() {
+int send_connect_message() {
     // Send connect message
     char msg[2];
     msg[0] = CMD_CONNECT;
@@ -114,18 +114,16 @@ void send_connect_message() {
             // Check is status is error
             if (response != RESP_OK) {
                 // Parse error
-                char error_msg[BUFFER_SIZE-10];
+                char error_msg[BUFFER_SIZE];
 
                 // Send error message to ncurses thread
                 pthread_mutex_lock(&ncurses_lock);
-                sprintf(output_buffer_line1, "Error: %s", error_msg);
+                sprintf(output_buffer_line1, "%s", error_msg);
                 sprintf(output_buffer_line2, " ");
                 output_ready = 1;
                 pthread_mutex_unlock(&ncurses_lock);
 
-
-                // TODO: Decide if this is the correct way to handle this
-                return;
+                return -1;
             } 
 
             // Send success message to ncurses thread
@@ -138,10 +136,9 @@ void send_connect_message() {
         }
 
     } else {
-        // TODO: Decide if this is the correct way to handle this
-        endwin();
-        exit(1);
+        return -1;
     }
+    return 0;
 }
 
 
@@ -153,9 +150,9 @@ void send_connect_message() {
  * and processes the user input based on the key pressed. It sends the appropriate
  * command to the server using ZeroMQ and updates the player's score based on the server's response.
  * 
- * If the input is 'q' or 'Q', it disconnects the client and exits the program.
+ * Returns 1 if client exits, 0 if client continues, or -1 if an error occurs(invalid move/zap etc.. is not considered an error).
  */
-void handle_key_input() {
+int handle_key_input() {
     // Wait for text output to be displayed
     // This is necessary to prevent locking in getch() without displaying the output first
     while(1) {
@@ -209,12 +206,11 @@ void handle_key_input() {
         case 'Q':
             snprintf(buffer, sizeof(buffer), "%c %c %s", CMD_DISCONNECT, player_id, session_token);
             zmq_send(req, buffer, strlen(buffer), 0);
-            endwin();
-            exit(0); // TODO: Decide if this is the correct way to handle this
+            return 1;
             break;
         default:
             // Ignore other keys
-            return;
+            return 0;
     }
 
     pthread_mutex_unlock(&ncurses_lock);
@@ -239,7 +235,7 @@ void handle_key_input() {
                 sprintf(output_buffer_line2, "Last action failed: %s ", error_msg);
                 output_ready = 1;
                 pthread_mutex_unlock(&ncurses_lock);
-                return;
+                return 0;
             }
 
             // Send new text to ncurses thread
@@ -248,24 +244,35 @@ void handle_key_input() {
             sprintf(output_buffer_line2, " ");
             output_ready = 1;
             pthread_mutex_unlock(&ncurses_lock);
+
+            return 0;
         }
 
 
     } else {
-        perror("Failed to receive response from server");
+        return -1;
     } 
+
+    return -1;
 }
 
 void client_main(void* requester) {
-
     req = requester;
 
+    int ret;
+
     // Send connect message and receive player ID
-    send_connect_message();
+    ret = send_connect_message();
+    if (ret == -1) {
+        return; // Void return, no error code
+    }
     
     // Main client loop
     while(1) {
-        handle_key_input();
+        ret = handle_key_input();
+        if (ret == 1 || ret == -1) {
+            return; // Void return, no error code
+        }
         usleep(10000); // 10ms delay to prevent busy waiting
     }
 
