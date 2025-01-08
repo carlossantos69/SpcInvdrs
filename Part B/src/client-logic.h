@@ -23,7 +23,7 @@ extern char output_buffer_line1[BUFFER_SIZE];
 extern char output_buffer_line2[BUFFER_SIZE];
 extern int input_ready;
 extern int output_ready;
-extern pthread_mutex_t ncurses_lock;
+extern pthread_mutex_t client_lock;
 
 void client_main(void* requester);
 

@@ -32,7 +32,7 @@ char output_buffer_line1[BUFFER_SIZE];
 char output_buffer_line2[BUFFER_SIZE];
 int input_ready = 0; // 1 if client is ready to receive keypress input
 int output_ready = 0; // 1 if client has output to display
-pthread_mutex_t ncurses_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t client_lock = PTHREAD_MUTEX_INITIALIZER; //TODO: rename to client_lock
 
 // Client state
 char player_id = '\0';
@@ -117,21 +117,21 @@ int send_connect_message() {
                 char error_msg[BUFFER_SIZE];
 
                 // Send error message to ncurses thread
-                pthread_mutex_lock(&ncurses_lock);
+                pthread_mutex_lock(&client_lock);
                 sprintf(output_buffer_line1, "%s", error_msg);
                 sprintf(output_buffer_line2, " ");
                 output_ready = 1;
-                pthread_mutex_unlock(&ncurses_lock);
+                pthread_mutex_unlock(&client_lock);
 
                 return -1;
             } 
 
             // Send success message to ncurses thread
-            pthread_mutex_lock(&ncurses_lock);
+            pthread_mutex_lock(&client_lock);
             sprintf(output_buffer_line1, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", player_id, player_score);
             sprintf(output_buffer_line2, " ");
             output_ready = 1;
-            pthread_mutex_unlock(&ncurses_lock);
+            pthread_mutex_unlock(&client_lock);
 
         }
 
@@ -156,27 +156,28 @@ int handle_key_input() {
     // Wait for text output to be displayed
     // This is necessary to prevent locking in getch() without displaying the output first
     while(1) {
-        pthread_mutex_lock(&ncurses_lock);
+        pthread_mutex_lock(&client_lock);
         if (output_ready == 0) {
             break;
         }
-        pthread_mutex_unlock(&ncurses_lock);
+        pthread_mutex_unlock(&client_lock);
     }
 
 
     // Mark input as ready
     input_ready = 1;
-    pthread_mutex_unlock(&ncurses_lock);
+    pthread_mutex_unlock(&client_lock);
 
 
     // Lock until ncurse thread sends input
     while(1) {
-        pthread_mutex_lock(&ncurses_lock);
+        pthread_mutex_lock(&client_lock);
 
         if (input_ready == 0) {
+            // No mutex unlock here, as we will continue doing more work
             break;
         }
-        pthread_mutex_unlock(&ncurses_lock);
+        pthread_mutex_unlock(&client_lock);
     }
 
     // Process user input
@@ -206,14 +207,16 @@ int handle_key_input() {
         case 'Q':
             snprintf(buffer, sizeof(buffer), "%c %c %s", CMD_DISCONNECT, player_id, session_token);
             zmq_send(req, buffer, strlen(buffer), 0);
+            pthread_mutex_unlock(&client_lock); // Should not be needed because client_main will return aswell
             return 1;
             break;
         default:
             // Ignore other keys
+            pthread_mutex_unlock(&client_lock); // Unlock mutex before returning
             return 0;
     }
 
-    pthread_mutex_unlock(&ncurses_lock);
+    pthread_mutex_unlock(&client_lock);
 
     // Receive response from the server
     int recv_size = zmq_recv(req, buffer, sizeof(buffer) - 1, 0);
@@ -230,20 +233,20 @@ int handle_key_input() {
                 find_error(response, error_msg);
 
                 // Send error message to ncurses thread
-                pthread_mutex_lock(&ncurses_lock);
+                pthread_mutex_lock(&client_lock);
                 sprintf(output_buffer_line1, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", player_id, player_score);
                 sprintf(output_buffer_line2, "Last action failed: %s ", error_msg);
                 output_ready = 1;
-                pthread_mutex_unlock(&ncurses_lock);
+                pthread_mutex_unlock(&client_lock);
                 return 0;
             }
 
             // Send new text to ncurses thread
-            pthread_mutex_lock(&ncurses_lock);
+            pthread_mutex_lock(&client_lock);
             sprintf(output_buffer_line1, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", player_id, player_score);
             sprintf(output_buffer_line2, " ");
             output_ready = 1;
-            pthread_mutex_unlock(&ncurses_lock);
+            pthread_mutex_unlock(&client_lock);
 
             return 0;
         }

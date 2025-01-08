@@ -59,7 +59,7 @@ void *thread_ncurses_routine(void *arg) {
 
 
     while(1) {
-        pthread_mutex_lock(&ncurses_lock);
+        pthread_mutex_lock(&client_lock);
 
         if (input_ready) {
             // Read char from user
@@ -88,7 +88,7 @@ void *thread_ncurses_routine(void *arg) {
             output_ready = 0;
         }
 
-        pthread_mutex_unlock(&ncurses_lock);
+        pthread_mutex_unlock(&client_lock);
     }
 
 
@@ -104,7 +104,7 @@ void *thread_ncurses_routine(void *arg) {
  * This function initializes the ncurses library for handling terminal input/output,
  * sets up a ZeroMQ context and socket for communication with the server, and enters
  * the main game loop where it handles key input and sends messages to the server.
- * 
+ * thread_client_routine
  * @return int Exit status of the program.
  */
 int main() {

@@ -1,7 +1,7 @@
 /*
  * PSIS 2024/2025 - Project Part 1
  *
- * Filename: outer-space-display.c
+ * Filename: astronaut-display-cient.c
  *
  * Authors:
  * - Carlos Santos - 102985 - carlos.r.santos@tecnico.ulisboa.pt
@@ -10,22 +10,24 @@
  * Group ID: 20
  *
  * Description:
- * Code that handles gameplay display. Calls space-display.c
+ * Code that handles astronaut client application with display.
  */
 
 #include <zmq.h>
 #include <pthread.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <ncurses.h>
-#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include "../src/config.h" 
-#include "../src/space-display.h" 
+#include <unistd.h>
+#include "../src/config.h"
+#include "../src/client-logic.h"
+#include "../src/space-display.h"
 
 // ZeroMQ subscriber socket
 void* context;
 void* subscriber;
+void* requester;
 
 // Flags to indicate thread ending
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -43,12 +45,26 @@ void cleanup() {
     pthread_mutex_lock(&display_lock);
     zmq_close(subscriber);
     pthread_mutex_unlock(&display_lock);
-    
+
+    zmq_close(requester);
     zmq_ctx_destroy(context);
     zmq_ctx_term(context);
     pthread_mutex_destroy(&display_lock);
+    pthread_mutex_destroy(&client_lock);
     pthread_mutex_destroy(&lock);
     endwin();
+}
+
+void *thread_client_routine(void *arg) {
+    // Avoid unused argument warning
+    (void)arg;
+
+    // Start the client
+    client_main(requester);
+
+    // Kill the program
+    cleanup();
+    exit(0);
 }
 
 void *thread_comm_routine(void *arg) {
@@ -96,7 +112,6 @@ void *thread_comm_routine(void *arg) {
     pthread_exit(NULL);
 }
 
-
 void *thread_display_routine(void *arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -116,15 +131,27 @@ void *thread_input_routine(void *arg) {
     (void)arg;
 
     while (1) {
-        char ch;
-        ssize_t n = read(STDIN_FILENO, &ch, 1);
-        if (n > 0) {
-            if (ch == 'q' || ch == 'Q') {
-                // Exit the program
-                cleanup();
-                exit(0);
-            }
+        pthread_mutex_lock(&client_lock);
+
+        if (input_ready) {
+            int ch;
+            ch = getch();
+            if (ch == ERR) { // No key pressed
+                ch = 'q'; // Tell the client to quit
+            };
+
+            input_buffer = ch;
+            input_ready = 0;
         }
+
+        if (output_ready) {
+            // Mark output processing as done
+            // Since we are in astronaut-display-client, 
+            // we do not output any client data, only outer-space-display
+            output_ready = 0;
+        }
+
+        pthread_mutex_unlock(&client_lock);
 
         // Exit the program is display thread has finished
         // Display thread finishes after game over screen is displayed
@@ -138,7 +165,17 @@ void *thread_input_routine(void *arg) {
 }
 
 
+/**
+ * @brief Main function for the astronaut client application.
+ * 
+ * This function initializes the ncurses library for handling terminal input/output,
+ * sets up a ZeroMQ context and socket for communication with the server, and enters
+ * the main game loop where it handles key input and sends messages to the server.
+ * 
+ * @return int Exit status of the program.
+ */
 int main() {
+    pthread_t thread_client;
     pthread_t thread_comm;
     pthread_t thread_display;
     pthread_t thread_input;
@@ -147,7 +184,8 @@ int main() {
     // Initialize ZeroMQ
     context = zmq_ctx_new();
     subscriber = zmq_socket(context, ZMQ_SUB);
-
+    requester = zmq_socket(context, ZMQ_REQ);
+    
     // Connect to server's PUB socket
     if (zmq_connect(subscriber, CLIENT_CONNECT_SUB) != 0) {
         perror("Failed to connect to game server");
@@ -158,7 +196,21 @@ int main() {
     // Subscribe to all messages
     zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, "", 0);
 
+    // Connect to server's REQ/REP socket
+    if (zmq_connect(requester, CLIENT_CONNECT_REQ) != 0) {
+        perror("Failed to connect to server");
+        endwin();
+        zmq_close(requester);
+        zmq_ctx_destroy(context);
+        exit(1);
+    }
+
     // Create the threads
+    ret = pthread_create(&thread_client, NULL, thread_client_routine, NULL);
+    if (ret != 0) {
+        perror("Failed to create thread_client");
+        return 1;
+    }
     ret = pthread_create(&thread_comm, NULL, thread_comm_routine, NULL);
     if (ret != 0) {
         perror("Failed to create thread_comm");
@@ -176,10 +228,13 @@ int main() {
     }
 
     // Note: program should not reach this point, as threads will manage program exit
+    pthread_join(thread_client, NULL);
     pthread_join(thread_comm, NULL);
     pthread_join(thread_display, NULL);
     pthread_join(thread_input, NULL);
 
     cleanup();
     exit(0);
+
+    return 0;
 }

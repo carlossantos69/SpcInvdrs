@@ -29,14 +29,14 @@ disp_Cell_t grid[GRID_HEIGHT][GRID_WIDTH];
 // Flag indicating whether the game over display is active
 int game_over_display = 0;
 
+// Mutex for display data
+pthread_mutex_t display_lock = PTHREAD_MUTEX_INITIALIZER;
+
 // This string is parsed to obtain the grid and player data
 //The game state string contains information about the game state, including player positions.
 //The string can either be passed from the server thread for the game-server.c application or
 //read via zeroMQ for outer-space-display.c. and astronaut-client.c applications.
 char game_state_display[BUFFER_SIZE];
-
-// Mutex for display data
-pthread_mutex_t display_lock;
 
 
 /**
@@ -390,6 +390,7 @@ void display_main() {
 
     // Main loop
     while (!game_over_display) {
+        // Read buffer data and update the grid
         pthread_mutex_lock(&display_lock);
         update_grid();
         draw_grid();
