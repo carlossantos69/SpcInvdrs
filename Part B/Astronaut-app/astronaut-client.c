@@ -64,7 +64,7 @@ void *thread_ncurses_routine(void *arg) {
         if (input_ready) {
             // Read char from user
             int ch = getch();
-            if (ch != ERR) { // No key pressed
+            if (ch == ERR) { // No key pressed
                 ch = 'q'; // Tell the client to quit
             };
 
