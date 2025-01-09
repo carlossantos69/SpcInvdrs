@@ -251,7 +251,7 @@ void cleanup();
  * @param resp Pointer to the response object.
  * @param pub Pointer to the publish object.
  */
-void game_logic(void* resp, void* pub);
+void game_logic(void* resp, void* pub, void* score_pub);
 
 
 #endif

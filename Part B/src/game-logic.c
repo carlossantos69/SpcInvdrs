@@ -18,10 +18,12 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <pthread.h>
+#include "scores.pb-c.h"
 
 
 void* resp;  // For REQ/REP with astronauts
 void* pub;  // For PUB/SUB with display
+void* score_pub;  // For PUB/SUB with scores
 
 // Game state representation
 Player_t players[MAX_PLAYERS];
@@ -347,6 +349,43 @@ void send_game_state() {
     pthread_mutex_lock(&server_lock);
     strcpy(game_state_server, message);
     pthread_mutex_unlock(&server_lock);
+}
+
+void send_score_updates() {
+    // Prepare protobuf structure
+    ScoreUpdate score_update = SCORE_UPDATE__INIT;
+    PlayerScore player_scores[MAX_PLAYERS];
+    PlayerScore *player_scores_ptrs[MAX_PLAYERS];
+    int count = 0;
+
+    score_update__init(&score_update);
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        player_score__init(&player_scores[i]);
+    }
+
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].id != '\0') {
+            player_scores[count].player_id = (int) players[i].id;
+            player_scores[count].score = players[i].score;
+            player_scores_ptrs[count] = &player_scores[count];
+            count++;
+        }
+    }
+
+    // Set repeated field
+    score_update.scores = player_scores_ptrs;
+    score_update.n_scores = count;
+
+    // Serialize to buffer
+    size_t buffer_size = score_update__get_packed_size(&score_update);
+    uint8_t *buffer = malloc(buffer_size);
+    score_update__pack(&score_update, buffer);
+
+    // Send serialized data over ZeroMQ
+    zmq_send(score_pub, buffer, buffer_size, 0);
+
+    // Cleanup
+    free(buffer);
 }
 
 
@@ -847,11 +886,12 @@ void send_game_over_state() {
  * @param responder Pointer to the responder socket.
  * @param publisher Pointer to the publisher socket.
  */
-void game_logic(void* responder, void* publisher) {
+void game_logic(void* responder, void* publisher, void* score_publisher) {
     initialize_game_state();
 
     pub = publisher;
     resp = responder;
+    score_pub = score_publisher;
 
     while (!game_over_server) {
         // Define safer buffer sizes
@@ -876,6 +916,7 @@ void game_logic(void* responder, void* publisher) {
 
         // Send updated state to socket and update global state string
         send_game_state();
+        send_score_updates();
         
         usleep(50000); // 50ms delay
     }

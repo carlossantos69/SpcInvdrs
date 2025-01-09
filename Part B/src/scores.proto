@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+message PlayerScore {
+    int32 player_id = 1;
+    int32 score = 2;
+}
+
+message ScoreUpdate {
+    repeated PlayerScore scores = 1;
+}

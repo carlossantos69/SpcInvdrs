@@ -27,6 +27,7 @@
 void* context;
 void* responder;  // For REQ/REP with astronauts
 void* publisher;  // For PUB/SUB with display
+void* scores_publisher;  // For PUB/SUB with scores
 
 // Flags to indicate thread ending
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -59,8 +60,11 @@ void* thread_server_routine(void* arg) {
     publisher = zmq_socket(context, ZMQ_PUB);
     zmq_bind(publisher, SERVER_ENDPOINT_PUB);
 
+    scores_publisher = zmq_socket(context, ZMQ_PUB);
+    zmq_bind(scores_publisher, SERVER_ENDPOINT_SCORES);
+
     // Start the game logic
-    game_logic(responder, publisher);
+    game_logic(responder, publisher, scores_publisher);
     
     // Note; no need to close the socket or context, as the cleanup function will handle it
 

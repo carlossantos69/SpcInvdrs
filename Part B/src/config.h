@@ -25,6 +25,7 @@
 // Network Configuration
 #define SERVER_ENDPOINT_REQ "tcp://*:5555"    // For REQ/REP with astronauts
 #define SERVER_ENDPOINT_PUB "tcp://*:5556"    // For PUB/SUB with display
+#define SERVER_ENDPOINT_SCORES "tcp://*:5557" // For PUB/SUB with scores
 #define CLIENT_CONNECT_REQ "tcp://localhost:5555"  // For astronauts to connect
 #define CLIENT_CONNECT_SUB "tcp://localhost:5556"  // For display to connect
 
@@ -32,7 +33,7 @@
 #define GRID_WIDTH 20
 #define GRID_HEIGHT 20
 #define MAX_PLAYERS 8
-#define MAX_ALIENS 80  // 1/3 of grid area?
+#define MAX_ALIENS 4 // 1/3 of grid area?
 #define BUFFER_SIZE 2048
 #define LASER_DURATION 0.5
 
