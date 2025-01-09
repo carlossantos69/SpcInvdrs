@@ -15,11 +15,13 @@
 
 #include "game-logic.h"
 #include "config.h"
+#include <math.h>
 #include <stdio.h>
 #include <sys/time.h>
 #include <pthread.h>
 #include <zmq.h>
 #include "scores.pb-c.h"
+#include "math.h"
 
 
 void* resp;  // For REQ/REP with astronauts
@@ -37,6 +39,9 @@ int game_over_server = 0;
 
 // Stores the timestamp of the last alien update
 double last_alien_move = 0;
+
+// Stores the timestamp of the last alien kill
+double last_kill_time = 0;
 
 // String to store the game state
 // It is parsed in the same way as the one passed in ZeroMQ publisher
@@ -276,6 +281,7 @@ void initialize_game_state() {
         aliens[i].y = 5 + rand() % (GRID_HEIGHT - 10);
         aliens[i].active = 1;
     }
+    last_kill_time = get_time_in_seconds();
 
 }
 
@@ -333,7 +339,8 @@ void send_game_state() {
 
         }
     }
-
+    
+    pthread_mutex_lock(&server_alien_lock);
     // Add all active aliens
     for (int i = 0; i < MAX_ALIENS; i++) {
         if (aliens[i].active) {
@@ -344,6 +351,8 @@ void send_game_state() {
             strcat(message, temp);
         }
     }
+    pthread_mutex_unlock(&server_alien_lock);
+
 
     // Send the message
     zmq_send(pub, message, strlen(message), 0);
@@ -725,6 +734,7 @@ void check_laser_collisions() {
                         // Destroy allien and update player score
                         aliens[j].active = 0;
                         players[i].score += KILL_POINTS;
+                        last_kill_time = get_time_in_seconds();
                     }
                 }
                 // Check colision with player
@@ -743,6 +753,7 @@ void check_laser_collisions() {
                         // Destroy allien and update player score
                         aliens[j].active = 0;
                         players[i].score += KILL_POINTS;
+                        last_kill_time = get_time_in_seconds();
                     }
                 }
                 // Check colision with player
@@ -773,8 +784,8 @@ void check_laser_collisions() {
 void update_alien_positions() {
     double current_time = get_time_in_seconds();
     
-    // Only move aliens if 1 second has passed since last move
     if (has_duration_passed(last_alien_move, ALIEN_MOVE_INTERVAL)) {
+        pthread_mutex_lock(&server_alien_lock);
         for (int i = 0; i < MAX_ALIENS; i++) {
             if (aliens[i].active) {
                 int direction = rand() % 4;
@@ -782,30 +793,33 @@ void update_alien_positions() {
                 int new_y = aliens[i].y;
                 
                 switch (direction) {
-                    case 0: // Move up
-                        new_y--;
-                        break;
-                    case 1: // Move down
-                        new_y++;
-                        break;
-                    case 2: // Move left
-                        new_x--;
-                        break;
-                    case 3: // Move right
-                        new_x++;
-                        break;
+                    case 0: new_y--; break;
+                    case 1: new_y++; break;
+                    case 2: new_x--; break;
+                    case 3: new_x++; break;
                 }
                 
-                // Check if new position is within alien area
+                // Check if new position is within alien area and not occupied
+                int position_valid = 1;
                 if (new_x >= ALIEN_AREA_START && new_x <= ALIEN_AREA_END &&
                     new_y >= ALIEN_AREA_START && new_y <= ALIEN_AREA_END) {
-                    aliens[i].x = new_x;
-                    aliens[i].y = new_y;
+                    // Check for other aliens at new position
+                    for (int j = 0; j < MAX_ALIENS; j++) {
+                        if (j != i && aliens[j].active && 
+                            aliens[j].x == new_x && aliens[j].y == new_y) {
+                            position_valid = 0;
+                            break;
+                        }
+                    }
+                    if (position_valid) {
+                        aliens[i].x = new_x;
+                        aliens[i].y = new_y;
+                    }
                 }
             }
         }
-        // Update the last move time
         last_alien_move = current_time;
+        pthread_mutex_unlock(&server_alien_lock);
     }
 }
 
@@ -818,7 +832,38 @@ void update_alien_positions() {
  */
 void update_game_state() {
     // Update alien positions
-    update_alien_positions();
+    //update_alien_positions();
+
+    double current_time = get_time_in_seconds();
+
+    // Check if 10 seconds passed without kills
+    if (has_duration_passed(last_kill_time, ALIEN_RECOVERY_TIME)) {
+        pthread_mutex_lock(&server_alien_lock);
+        int current_aliens = 0;
+        // Count current aliens
+        for (int i = 0; i < MAX_ALIENS; i++) {
+            if (aliens[i].active) {
+                current_aliens++;
+            }
+        }
+        
+        // Calculate 10% of current aliens (round up)
+        int new_aliens = round(current_aliens * 0.1 + 0.5);
+        
+        // Add new aliens if there's space
+        int added = 0;
+        for (int i = 0; i < MAX_ALIENS && added < new_aliens; i++) {
+            if (!aliens[i].active) {
+                aliens[i].active = 1;
+                aliens[i].x = 5 + rand() % (GRID_WIDTH - 10);
+                aliens[i].y = 5 + rand() % (GRID_HEIGHT - 10);
+                added++;
+            }
+        }
+        // Reset kill timer
+        last_kill_time = current_time;
+        pthread_mutex_unlock(&server_alien_lock);
+    }
     
     // Check laser collisions and update scores
     check_laser_collisions();
@@ -903,6 +948,7 @@ void game_logic(void* responder, void* publisher, void* score_publisher) {
     pub = publisher;
     resp = responder;
     score_pub = score_publisher;
+
 
     while (!game_over_server) {
         // Define safer buffer sizes

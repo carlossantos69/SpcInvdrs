@@ -16,6 +16,8 @@
 
 #ifndef CLIENT_LOGIC_H
 #define CLIENT_LOGIC_H
+#include "config.h"
+#include "pthread.h"
 
 // Extern variables that will be used in other files
 extern int input_buffer;

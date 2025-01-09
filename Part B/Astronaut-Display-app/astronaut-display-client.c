@@ -87,7 +87,7 @@ void *thread_comm_routine(void *arg) {
             buffer[recv_size] = '\0';
             pthread_mutex_lock(&display_lock);
             // Copy the message to shared memory
-            // Note: this string defines the game state. state-display.c will parse it
+            // Note: this string defines the game state. space-display.c will parse it
             strcpy(game_state_display, buffer);
             pthread_mutex_unlock(&display_lock);
         } else {

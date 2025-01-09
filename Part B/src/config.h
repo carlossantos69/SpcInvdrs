@@ -20,7 +20,8 @@
 #define LASER_COOLDOWN 3     // seconds between laser fires
 #define STUN_DURATION 10     // seconds an astronaut is stunned
 #define ALIEN_MOVE_INTERVAL 1 // seconds between alien movements
-#define KILL_POINTS 1
+#define ALIEN_RECOVERY_TIME 10 // seconds for alien to respawn
+#define KILL_POINTS 1       // points for killing an alien
 
 // Network Configuration
 #define SERVER_ENDPOINT_REQ "tcp://*:5555"    // For REQ/REP with astronauts
