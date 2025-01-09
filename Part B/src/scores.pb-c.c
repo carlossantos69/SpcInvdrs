@@ -148,7 +148,7 @@ const ProtobufCMessageDescriptor player_score__descriptor =
   (ProtobufCMessageInit) player_score__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor score_update__field_descriptors[1] =
+static const ProtobufCFieldDescriptor score_update__field_descriptors[2] =
 {
   {
     "scores",
@@ -162,14 +162,27 @@ static const ProtobufCFieldDescriptor score_update__field_descriptors[1] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "game_over",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(ScoreUpdate, game_over),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned score_update__field_indices_by_name[] = {
+  1,   /* field[1] = game_over */
   0,   /* field[0] = scores */
 };
 static const ProtobufCIntRange score_update__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 1 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor score_update__descriptor =
 {
@@ -179,7 +192,7 @@ const ProtobufCMessageDescriptor score_update__descriptor =
   "ScoreUpdate",
   "",
   sizeof(ScoreUpdate),
-  1,
+  2,
   score_update__field_descriptors,
   score_update__field_indices_by_name,
   1,  score_update__number_ranges,

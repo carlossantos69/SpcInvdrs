@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <pthread.h>
+#include <zmq.h>
 #include "scores.pb-c.h"
 
 
@@ -28,6 +29,8 @@ void* score_pub;  // For PUB/SUB with scores
 // Game state representation
 Player_t players[MAX_PLAYERS];
 Alien_t aliens[MAX_ALIENS];
+
+ScoreUpdate score_update = SCORE_UPDATE__INIT;
 
 // Indicates whether the game is over (1) or not (0)
 int game_over_server = 0;
@@ -353,7 +356,6 @@ void send_game_state() {
 
 void send_score_updates() {
     // Prepare protobuf structure
-    ScoreUpdate score_update = SCORE_UPDATE__INIT;
     PlayerScore player_scores[MAX_PLAYERS];
     PlayerScore *player_scores_ptrs[MAX_PLAYERS];
     int count = 0;
@@ -865,10 +867,19 @@ void send_game_over_state() {
             strcat(message, temp);
         }
     }
+
     
 
     // Send the message
     zmq_send(pub, message, strlen(message), 0);
+    // Send protobuf game over message
+    ScoreUpdate score_update = SCORE_UPDATE__INIT;
+    score_update.game_over = 1;
+    size_t buffer_size = score_update__get_packed_size(&score_update);
+    uint8_t *buffer = malloc(buffer_size);
+    score_update__pack(&score_update, buffer);
+    zmq_send(score_pub, buffer, buffer_size, 0);
+    free(buffer);    
 
     // Update the game state string
     pthread_mutex_lock(&server_lock);

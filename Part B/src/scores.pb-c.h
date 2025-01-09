@@ -40,10 +40,11 @@ struct  _ScoreUpdate
   ProtobufCMessage base;
   size_t n_scores;
   PlayerScore **scores;
+  int32_t game_over;
 };
 #define SCORE_UPDATE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&score_update__descriptor) \
-    , 0,NULL }
+    , 0,NULL, 0 }
 
 
 /* PlayerScore methods */

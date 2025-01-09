@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\x0cscores.proto\"/\n\x0bPlayerScore\x12\x11\n\tplayer_id\x18\x01 \x01(\x05\x12\r\n\x05score\x18\x02 \x01(\x05\"+\n\x0bScoreUpdate\x12\x1c\n\x06scores\x18\x01 \x03(\x0b\x32\x0c.PlayerScoreb\x06proto3'
+  serialized_pb=b'\n\x0cscores.proto\"/\n\x0bPlayerScore\x12\x11\n\tplayer_id\x18\x01 \x01(\x05\x12\r\n\x05score\x18\x02 \x01(\x05\">\n\x0bScoreUpdate\x12\x1c\n\x06scores\x18\x01 \x03(\x0b\x32\x0c.PlayerScore\x12\x11\n\tgame_over\x18\x02 \x01(\x05\x62\x06proto3'
 )
 
 
@@ -79,6 +79,13 @@ _SCOREUPDATE = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='game_over', full_name='ScoreUpdate.game_over', index=1,
+      number=2, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -92,7 +99,7 @@ _SCOREUPDATE = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=65,
-  serialized_end=108,
+  serialized_end=127,
 )
 
 _SCOREUPDATE.fields_by_name['scores'].message_type = _PLAYERSCORE

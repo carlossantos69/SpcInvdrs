@@ -7,4 +7,5 @@ message PlayerScore {
 
 message ScoreUpdate {
     repeated PlayerScore scores = 1;
+    int32 game_over = 2;
 }
