@@ -92,6 +92,7 @@ void* thread_display_data_routine(void* arg) {
 
         // Copy the game state string in the server to a buffer
         // This is to release the lock the fastest possible
+        // TODO: Create function to get game state
         pthread_mutex_lock(&server_lock);
         strcpy(buffer, game_state_server);
         pthread_mutex_unlock(&server_lock);

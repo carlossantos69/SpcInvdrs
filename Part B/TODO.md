@@ -1,38 +1,20 @@
-# Game Server
+# TODOS
 
-Vai ter de ser reformulado para usar threads.
+## Makefile
 
-Recebe mensagens dos clients: astronaut e astronaut-display, são a mesma coisa
+    Meter o makefile a apagar ficheiros de compilação temporarios. Apenas guardar os outputs
 
-Manda mensagens para os displays: astronaut-display e outer-display; scores para a app de scores 
 
-Threads para:
+## Game Server
+    Decidir o que se faz quando não se consegue começar as threads no game-logic.c
+    Decidir se mutex é preciso nos while (!game_over)
+    Decidir se é preciso sleep em alguns dos sitios
+    Arranjar forma se só publicar o novo estado quando se processa uma mensagem se realmente for preciso
+    send_game_state e send_score_updates bloqueiam o mutex do game state enquanto estão a mandar a mensagem
+    Arranjar forma de nao usar extern no game-logic.c. Criar uma função get_game_state() no game-logic. que é chamada no game-server.c
 
-    - movimentos dos aliens
 
-    - receber mensagens
 
-    - mandar mensagens
-    
-    - ...
 
-Usar mutexes quando se aceder a memoria partilhada
-
-# Astronaut-client
-
-Devia de ficar basicamente igual.
-Só manda mensagens para o game server e recebe respostas do seu score.
-
-# OuterSpaceDisplay
-
-Também devia de ficar igual, só recebe mensagens do game server e atualiza o ecrã da mesma maneira.
-
-# AstronautDisplay
-
-Astronaut client + outer space display.
-Manda e recebe mensagens ZMQ, tem de receber todas as mensagens necessárias para atualizar o ecrã da mesma forma que o outer-space-display.
-Mutexes para as estruturas que precisa para atualizar o ecrã, da mesma forma que o game server vai fazer.
-
-# Score Update
-
-Recebe mensagens de todos os scores e atualiza o ecrã com essa informação.
+## Geral
+    Pesquisar se é preciso pthread_mutex_destroy para um mutex inicializado com PTHREAD_MUTEX_INITIALIZER

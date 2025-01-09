@@ -941,8 +941,6 @@ void* thread_alien_routine(void* arg) {
     (void)arg;
 
     while (!game_over) { // TODO: Mutex needed?
-        // TODO: Loop every x seconds, lock mutex and compute new alien positions
-
         pthread_mutex_lock(&game_state_lock);
         // Update aliens positions
         update_alien_positions();
@@ -981,6 +979,11 @@ void* thread_updater_routine(void* arg) {
         pthread_mutex_unlock(&game_state_lock);
 
         // TODO: Decide if we need to sleep here
+
+        /**
+         * We could think about adding a sleep statement here, but we are using threads and
+         * this would not block other tasks for much time. And leads to better timed updates
+         */
 
     }
 
@@ -1041,7 +1044,10 @@ void* thread_publisher_routine(void* arg) {
         }
         pthread_mutex_unlock(&game_state_lock);
 
-        // TODO: Sleep for a bit?
+        /**
+         * We could think about adding a sleep statement here, but we are using threads and
+         * this would not block other tasks for much time.
+         */
     }
 
     // End of thread
