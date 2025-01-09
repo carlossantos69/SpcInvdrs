@@ -2,6 +2,8 @@ import zmq
 from scores_pb2 import ScoreUpdate
 
 def receive_score_updates():
+    print("Starting the high scores subscriber, waiting for server to send updates...")
+
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
     socket.connect("tcp://localhost:5557")
