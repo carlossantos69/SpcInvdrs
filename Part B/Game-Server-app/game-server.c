@@ -37,6 +37,7 @@ bool thread_display_finished = false;
 void cleanup() {
     zmq_close(responder);
     zmq_close(publisher);
+    zmq_close(scores_publisher);
     zmq_ctx_destroy(context);
     zmq_ctx_term(context);
     pthread_mutex_destroy(&server_lock);
