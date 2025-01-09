@@ -23,7 +23,7 @@
 #include "scores.pb-c.h"
 #include "math.h"
 
-
+// ZeroMQ sockets
 void* resp;  // For REQ/REP with astronauts
 void* pub;  // For PUB/SUB with display
 void* score_pub;  // For PUB/SUB with scores
@@ -32,25 +32,36 @@ void* score_pub;  // For PUB/SUB with scores
 Player_t players[MAX_PLAYERS];
 Alien_t aliens[MAX_ALIENS];
 
-ScoreUpdate score_update = SCORE_UPDATE__INIT;
-
 // Indicates whether the game is over (1) or not (0)
-int game_over_server = 0;
+int game_over = 0;
 
-// Stores the timestamp of the last alien update
-double last_alien_move = 0;
+// Flag to request the publisher thread to send new game data
+int request_publish = 0;
+
+// Stores the timestamp of the last game state update
+double last_update_time = 0;
 
 // Stores the timestamp of the last alien kill
 double last_kill_time = 0;
+
+ScoreUpdate score_update = SCORE_UPDATE__INIT;
+
+// Mutex for internal game data
+pthread_mutex_t game_state_lock = PTHREAD_MUTEX_INITIALIZER; // Mutex used to synchronize access to the game state structures
+
+
+// Data shared with game-server.c:
 
 // String to store the game state
 // It is parsed in the same way as the one passed in ZeroMQ publisher
 // thread_display_data_routine in main() reads and passes to display
 char game_state_server[BUFFER_SIZE];
 
+// Flag used to request game over
+int request_game_over = 0;
+
 // Mutex for server data
-pthread_mutex_t server_lock;
-pthread_mutex_t server_alien_lock;
+pthread_mutex_t server_lock; // Mutex used to synchronize access to the game state string
 
 
 /**
@@ -286,121 +297,6 @@ void initialize_game_state() {
 }
 
 /**
- * @brief Sends the current game state to all subscribers.
- *
- * This function constructs a message containing the state of all active players,
- * their positions, scores, and laser statuses, as well as the positions of all
- * active aliens. The message is then sent to display subscribers.
- *
- * The message format includes:
- * - Player information: CMD_PLAYER, player ID, x position, y position
- * - Score information: CMD_SCORE, player ID, score
- * - Laser information (if active): CMD_LASER, x position, y position, zone
- * - Alien information: CMD_ALIEN, x position, y position
- *
- * The function iterates through all players and aliens, adding their information
- * to the message if they are active.
- *
- * @note The function assumes that the players and aliens arrays, as well as the
- *       publisher socket, are properly initialized and accessible.
- */
-void send_game_state() {
-    char message[BUFFER_SIZE] = "";
-    char temp[100];
-
-    // Add all active players to message
-    // Add all active players and their positions
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].id != '\0') {
-            // Add player information
-            snprintf(temp, sizeof(temp), "%c %c %d %d\n",
-                    CMD_PLAYER,
-                    players[i].id, 
-                    players[i].x, 
-                    players[i].y);
-            strcat(message, temp);
-            
-            // Add score information
-            snprintf(temp, sizeof(temp), "%c %c %d\n",
-                    CMD_SCORE,
-                    players[i].id,
-                    players[i].score);
-            strcat(message, temp);
-
-            // Add laser information
-            if (players[i].laser.active) {
-                snprintf(temp, sizeof(temp), "%c %d %d %d\n",
-                        CMD_LASER,
-                        players[i].laser.x,
-                        players[i].laser.y,
-                        players[i].zone);
-                strcat(message, temp);
-            }
-
-        }
-    }
-    
-    pthread_mutex_lock(&server_alien_lock);
-    // Add all active aliens
-    for (int i = 0; i < MAX_ALIENS; i++) {
-        if (aliens[i].active) {
-            snprintf(temp, sizeof(temp), "%c %d %d\n",
-                    CMD_ALIEN,
-                    aliens[i].x,
-                    aliens[i].y);
-            strcat(message, temp);
-        }
-    }
-    pthread_mutex_unlock(&server_alien_lock);
-
-
-    // Send the message
-    zmq_send(pub, message, strlen(message), 0);
-
-    // Update the game state string
-    pthread_mutex_lock(&server_lock);
-    strcpy(game_state_server, message);
-    pthread_mutex_unlock(&server_lock);
-}
-
-void send_score_updates() {
-    // Prepare protobuf structure
-    PlayerScore player_scores[MAX_PLAYERS];
-    PlayerScore *player_scores_ptrs[MAX_PLAYERS];
-    int count = 0;
-
-    score_update__init(&score_update);
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        player_score__init(&player_scores[i]);
-    }
-
-    for (int i = 0; i < MAX_PLAYERS; i++) {
-        if (players[i].id != '\0') {
-            player_scores[count].player_id = (int) players[i].id;
-            player_scores[count].score = players[i].score;
-            player_scores_ptrs[count] = &player_scores[count];
-            count++;
-        }
-    }
-
-    // Set repeated field
-    score_update.scores = player_scores_ptrs;
-    score_update.n_scores = count;
-
-    // Serialize to buffer
-    size_t buffer_size = score_update__get_packed_size(&score_update);
-    uint8_t *buffer = malloc(buffer_size);
-    score_update__pack(&score_update, buffer);
-
-    // Send serialized data over ZeroMQ
-    zmq_send(score_pub, buffer, buffer_size, 0);
-
-    // Cleanup
-    free(buffer);
-}
-
-
-/**
  * @brief Checks if the player's move in the specified direction is valid.
  *
  * This function calculates the potential new position of the player based on the
@@ -536,6 +432,8 @@ void initialize_player_position(Player_t* player) {
  * - Error: "<error_code>"
  *
  * Error codes come from config.h constants
+ *
+ * @note This function is not thread-safe.
  */
 void process_client_message(char* message, char* response) {
     if (message[0] == CMD_CONNECT) {
@@ -720,6 +618,8 @@ void process_client_message(char* message, char* response) {
  * 
  * When a collision with another player is detected, the other player's last stun time
  * is updated to the current time.
+ * 
+ * @note This function is not thread-safe.
  */
 void check_laser_collisions() {
     for (int i = 0; i < MAX_PLAYERS; i++) {
@@ -780,65 +680,55 @@ void check_laser_collisions() {
  *
  * The function uses the current time to determine if the aliens should be moved and updates
  * the last move time accordingly.
+ * 
+ * @note This function is not thread-safe.
  */
 void update_alien_positions() {
-    double current_time = get_time_in_seconds();
-    
-    if (has_duration_passed(last_alien_move, ALIEN_MOVE_INTERVAL)) {
-        pthread_mutex_lock(&server_alien_lock);
-        for (int i = 0; i < MAX_ALIENS; i++) {
-            if (aliens[i].active) {
-                int direction = rand() % 4;
-                int new_x = aliens[i].x;
-                int new_y = aliens[i].y;
-                
-                switch (direction) {
-                    case 0: new_y--; break;
-                    case 1: new_y++; break;
-                    case 2: new_x--; break;
-                    case 3: new_x++; break;
+    for (int i = 0; i < MAX_ALIENS; i++) {
+        if (aliens[i].active) {
+            int direction = rand() % 4;
+            int new_x = aliens[i].x;
+            int new_y = aliens[i].y;
+            
+            switch (direction) {
+                case 0: new_y--; break;
+                case 1: new_y++; break;
+                case 2: new_x--; break;
+                case 3: new_x++; break;
+            }
+            
+            // Check if new position is within alien area and not occupied
+            int position_valid = 1;
+            if (new_x >= ALIEN_AREA_START && new_x <= ALIEN_AREA_END &&
+                new_y >= ALIEN_AREA_START && new_y <= ALIEN_AREA_END) {
+                // Check for other aliens at new position
+                for (int j = 0; j < MAX_ALIENS; j++) {
+                    if (j != i && aliens[j].active && 
+                        aliens[j].x == new_x && aliens[j].y == new_y) {
+                        position_valid = 0;
+                        break;
+                    }
                 }
-                
-                // Check if new position is within alien area and not occupied
-                int position_valid = 1;
-                if (new_x >= ALIEN_AREA_START && new_x <= ALIEN_AREA_END &&
-                    new_y >= ALIEN_AREA_START && new_y <= ALIEN_AREA_END) {
-                    // Check for other aliens at new position
-                    for (int j = 0; j < MAX_ALIENS; j++) {
-                        if (j != i && aliens[j].active && 
-                            aliens[j].x == new_x && aliens[j].y == new_y) {
-                            position_valid = 0;
-                            break;
-                        }
-                    }
-                    if (position_valid) {
-                        aliens[i].x = new_x;
-                        aliens[i].y = new_y;
-                    }
+                if (position_valid) {
+                    aliens[i].x = new_x;
+                    aliens[i].y = new_y;
                 }
             }
         }
-        last_alien_move = current_time;
-        pthread_mutex_unlock(&server_alien_lock);
     }
 }
 
 /**
  * @brief Updates the game state by performing several actions:
- *        - Updates the positions of all aliens.
  *        - Checks for laser collisions and updates scores accordingly.
  *        - Deactivates lasers that have been active for longer than LASER_DURATION seconds.
  *        - Checks if all aliens are destroyed and sets the game over flag if true.
+ * 
+ * @note This function is not thread-safe.
  */
 void update_game_state() {
-    // Update alien positions
-    //update_alien_positions();
-
-    double current_time = get_time_in_seconds();
-
     // Check if 10 seconds passed without kills
     if (has_duration_passed(last_kill_time, ALIEN_RECOVERY_TIME)) {
-        pthread_mutex_lock(&server_alien_lock);
         int current_aliens = 0;
         // Count current aliens
         for (int i = 0; i < MAX_ALIENS; i++) {
@@ -861,8 +751,7 @@ void update_game_state() {
             }
         }
         // Reset kill timer
-        last_kill_time = current_time;
-        pthread_mutex_unlock(&server_alien_lock);
+        last_kill_time = get_time_in_seconds();
     }
     
     // Check laser collisions and update scores
@@ -877,8 +766,125 @@ void update_game_state() {
 
     // Check if all aliens are destroyed
     if (all_aliens_destroyed()) {
-        game_over_server = 1; // Set a game over flag
+        game_over = 1; // Set a game over flag
     }
+}
+
+/**
+ * @brief Sends the current game state to all subscribers.
+ *
+ * This function constructs a message containing the state of all active players,
+ * their positions, scores, and laser statuses, as well as the positions of all
+ * active aliens. The message is then sent to display subscribers.
+ *
+ * The message format includes:
+ * - Player information: CMD_PLAYER, player ID, x position, y position
+ * - Score information: CMD_SCORE, player ID, score
+ * - Laser information (if active): CMD_LASER, x position, y position, zone
+ * - Alien information: CMD_ALIEN, x position, y position
+ *
+ * The function iterates through all players and aliens, adding their information
+ * to the message if they are active.
+ *
+ * @note The function assumes that the players and aliens arrays, as well as the
+ *       publisher socket, are properly initialized and accessible.
+ * 
+ * @note This function is thread-safe.
+ */
+void send_game_state() {
+    char message[BUFFER_SIZE] = "";
+    char temp[100];
+
+    // Add all active players to message
+    // Add all active players and their positions
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].id != '\0') {
+            // Add player information
+            snprintf(temp, sizeof(temp), "%c %c %d %d\n",
+                    CMD_PLAYER,
+                    players[i].id, 
+                    players[i].x, 
+                    players[i].y);
+            strcat(message, temp);
+            
+            // Add score information
+            snprintf(temp, sizeof(temp), "%c %c %d\n",
+                    CMD_SCORE,
+                    players[i].id,
+                    players[i].score);
+            strcat(message, temp);
+
+            // Add laser information
+            if (players[i].laser.active) {
+                snprintf(temp, sizeof(temp), "%c %d %d %d\n",
+                        CMD_LASER,
+                        players[i].laser.x,
+                        players[i].laser.y,
+                        players[i].zone);
+                strcat(message, temp);
+            }
+
+        }
+    }
+    
+    // Add all active aliens
+    for (int i = 0; i < MAX_ALIENS; i++) {
+        if (aliens[i].active) {
+            snprintf(temp, sizeof(temp), "%c %d %d\n",
+                    CMD_ALIEN,
+                    aliens[i].x,
+                    aliens[i].y);
+            strcat(message, temp);
+        }
+    }
+
+    // Send the message
+    zmq_send(pub, message, strlen(message), 0);
+
+    // Update the game state string
+    pthread_mutex_lock(&server_lock);
+    strcpy(game_state_server, message);
+    pthread_mutex_unlock(&server_lock);
+}
+
+
+// Note, this function is not thread-safe
+void send_score_updates() {
+    // Prepare protobuf structure
+    PlayerScore player_scores[MAX_PLAYERS];
+    PlayerScore *player_scores_ptrs[MAX_PLAYERS];
+    int count = 0;
+
+    // Initialize protobuf structures
+    score_update__init(&score_update);
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        player_score__init(&player_scores[i]);
+    }
+
+    // Fill in player scores
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        if (players[i].id != '\0') {
+            player_scores[count].player_id = (int) players[i].id;
+            player_scores[count].score = players[i].score;
+            player_scores_ptrs[count] = &player_scores[count];
+            count++;
+        }
+    }
+
+    // Set repeated field
+    score_update.scores = player_scores_ptrs;
+    score_update.n_scores = count;
+
+    // Serialize to buffer
+    size_t buffer_size = score_update__get_packed_size(&score_update);
+    uint8_t *buffer = malloc(buffer_size);
+    score_update__pack(&score_update, buffer);
+
+    // Send serialized data over ZeroMQ
+    zmq_send(score_pub, buffer, buffer_size, 0);
+
+    // Cleanup
+    free(buffer);
 }
 
 /**
@@ -913,8 +919,6 @@ void send_game_over_state() {
         }
     }
 
-    
-
     // Send the message
     zmq_send(pub, message, strlen(message), 0);
     // Send protobuf game over message
@@ -930,6 +934,130 @@ void send_game_over_state() {
     pthread_mutex_lock(&server_lock);
     strcpy(game_state_server, message);
     pthread_mutex_unlock(&server_lock);
+}
+
+void* thread_alien_routine(void* arg) {
+    // Avoid unused parameter warning
+    (void)arg;
+
+    while (!game_over) { // TODO: Mutex needed?
+        // TODO: Loop every x seconds, lock mutex and compute new alien positions
+
+        pthread_mutex_lock(&game_state_lock);
+        // Update aliens positions
+        update_alien_positions();
+
+        // Request a client update
+        request_publish = 1;
+        pthread_mutex_unlock(&game_state_lock);
+
+        // Sleep until next update
+        // Note: It was thought to use has_duration_passed 
+        //     because this thread might take a max of ALIEN_MOVE_INTERVAL to check game_over_server and exit
+        //     it was decided to ignore this thread in pthread_join part
+        sleep(ALIEN_MOVE_INTERVAL); // Sleep for 1 second
+
+    }
+
+    // End of thread
+    pthread_exit(NULL);
+}
+
+void* thread_updater_routine(void* arg) {
+    // Avoid unused parameter warning
+    (void)arg;
+
+    while (!game_over) { // TODO: Mutex needed?
+        pthread_mutex_lock(&game_state_lock);
+        if (has_duration_passed(last_update_time, GAME_UPDATE_INTERVAL / 1000.0)) {
+            last_update_time = get_time_in_seconds();
+
+            // Update game state
+            update_game_state();
+
+            // Request a client update
+            request_publish = 1;
+        }
+        pthread_mutex_unlock(&game_state_lock);
+
+        // TODO: Decide if we need to sleep here
+
+    }
+
+    // End of thread
+    pthread_exit(NULL);
+}
+
+void* thread_listener_routine(void* arg) {
+    // Avoid unused parameter warning
+    (void)arg;
+
+    while (!game_over) { // TODO: Mutex needed?
+        // Define safer buffer sizes
+        char buffer[BUFFER_SIZE] = {0};
+
+        // Receive messages with a maximum limit
+        int recv_size = zmq_recv(resp, buffer, sizeof(buffer) - 1, 0);
+        if (recv_size > 0 && recv_size < BUFFER_SIZE) {
+            buffer[recv_size] = '\0';
+            char response[BUFFER_SIZE];
+
+            pthread_mutex_lock(&game_state_lock);
+            // Process the message and update game state
+            process_client_message(buffer, response);
+
+            // Request a client update
+            // TODO: Only send if necessary
+            request_publish = 1;
+            pthread_mutex_unlock(&game_state_lock);
+
+            // Send response to client
+            zmq_send(resp, response, strlen(response), 0);
+
+        } else if (recv_size >= BUFFER_SIZE) {
+            // Message too long, possible overflow attempt
+            //char response[] = "ERROR Message too long";
+            char response = ERR_TOLONG;
+            zmq_send(resp, &response, sizeof(response), 0);
+        }
+    }
+
+    // End of thread
+    pthread_exit(NULL);
+}
+
+void* thread_publisher_routine(void* arg) {
+    // Avoid unused parameter warning
+    (void)arg;
+
+    while(!game_over) {
+        pthread_mutex_lock(&game_state_lock);
+        if (request_publish) {
+            send_game_state();
+            send_score_updates();
+            request_publish = 0;
+            // TODO: this code blocks game_state_lock but only finishes when zmq send data inside send_game_state and send_score_updates
+            // TODO: Some type of rate limiting?
+        }
+        pthread_mutex_unlock(&game_state_lock);
+
+        // TODO: Sleep for a bit?
+    }
+
+    // End of thread
+    pthread_exit(NULL);
+}
+
+/**
+ * @brief Sets the game over flag to end the game.
+ *
+ * This function sets the game over flag to 1, indicating that the game has ended.
+ * It is used to stop the game logic loop .
+ */
+void end_game_logic(){
+    pthread_mutex_lock(&game_state_lock);
+    game_over = 1;
+    pthread_mutex_unlock(&game_state_lock);
 }
 
 /**
@@ -949,34 +1077,42 @@ void game_logic(void* responder, void* publisher, void* score_publisher) {
     resp = responder;
     score_pub = score_publisher;
 
+    pthread_t thread_alien;
+    pthread_t thread_updater;
+    pthread_t thread_listener;
+    pthread_t thread_publisher;
+    int ret;
 
-    while (!game_over_server) {
-        // Define safer buffer sizes
-        char buffer[BUFFER_SIZE] = {0};
-
-        // Receive messages with a maximum limit
-        int recv_size = zmq_recv(responder, buffer, BUFFER_SIZE - 1, ZMQ_DONTWAIT);
-        if (recv_size > 0 && recv_size < BUFFER_SIZE) {
-            buffer[recv_size] = '\0';
-            char response[BUFFER_SIZE];
-            process_client_message(buffer, response);
-            zmq_send(resp, response, strlen(response), 0);
-        } else if (recv_size >= BUFFER_SIZE) {
-            // Message too long, possible overflow attempt
-            //char response[] = "ERROR Message too long";
-            char response = ERR_TOLONG;
-            zmq_send(resp, &response, sizeof(response), 0);
-        }
-        
-        // Update game state
-        update_game_state();
-
-        // Send updated state to socket and update global state string
-        send_game_state();
-        send_score_updates();
-        
-        usleep(50000); // 50ms delay
+    ret = pthread_create(&thread_alien, NULL, thread_alien_routine, NULL);
+    if (ret != 0) {
+        // TODO: Decide what to do in case of error
+        perror("Failed to create thread_alien");
+        exit(EXIT_FAILURE);
     }
+    ret = pthread_create(&thread_updater, NULL, thread_updater_routine, NULL);
+    if (ret != 0) {
+        // TODO: Decide what to do in case of error
+        perror("Failed to create thread_updater");
+        exit(EXIT_FAILURE);
+    }
+    ret = pthread_create(&thread_listener, NULL, thread_listener_routine, NULL);
+    if (ret != 0) {
+        // TODO: Decide what to do in case of error
+        perror("Failed to create thread_listener");
+        exit(EXIT_FAILURE);
+    }
+    ret = pthread_create(&thread_publisher, NULL, thread_publisher_routine, NULL);
+    if (ret != 0) {
+        // TODO: Decide what to do in case of error
+        perror("Failed to create thread_publisher");
+        exit(EXIT_FAILURE);
+    }
+
+
+    //pthread_join(thread_alien, NULL); // This thread is not joined because at max it would take ALIEN_MOVE_INTERVAL to finish, delaying the game over
+    pthread_join(thread_updater, NULL);
+    //pthread_join(thread_listener, NULL); // This thread is not joined because it can be blocked by zmq_recv
+    //pthread_join(thread_publisher, NULL); // This thread is not joined because it can take some time to end zmq_send and a new update will be requested at gameover
 
     send_game_over_state();
 }

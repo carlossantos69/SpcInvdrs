@@ -133,10 +133,8 @@ void* thread_input_routine(void* arg) {
         ssize_t n = read(STDIN_FILENO, &ch, 1);
         if (n > 0) {
             if (ch == 'q' || ch == 'Q') {
-                // Set flag to notify game over
-                pthread_mutex_lock(&server_lock);
-                game_over_server = 1;
-                pthread_mutex_unlock(&server_lock);
+                // End game logic
+                end_game_logic();
                 break;
             }
 
@@ -161,15 +159,6 @@ void* thread_input_routine(void* arg) {
     }
 }
 
-void* thread_alien_movement_routine(void* arg){
-    (void)arg;
-
-    while(!game_over_server){
-        update_alien_positions();
-    }
-    
-    pthread_exit(NULL);    
-}
 
 /**
  * @brief Main function to start the game server and display.
@@ -186,7 +175,6 @@ int main() {
     pthread_t thread_display_data;
     pthread_t thread_display;
     pthread_t thread_input;
-    pthread_t thread_alien_movement;
     int ret;
 
     // Initialize the mutexes
@@ -220,18 +208,12 @@ int main() {
         perror("Failed to create thread_input");
         return 1;
     }
-    ret = pthread_create(&thread_alien_movement, NULL, thread_alien_movement_routine, NULL);
-    if (ret != 0) {
-        perror("Failed to create thread_alien_movement");
-        return 1;
-    }
 
     // Note: program should not reach this point, as threads will manage program exit
     pthread_join(thread_server, NULL);
     pthread_join(thread_display_data, NULL);
     pthread_join(thread_display, NULL);
     pthread_join(thread_input, NULL);
-    pthread_join(thread_alien_movement, NULL);  
 
     cleanup();
     exit(0);

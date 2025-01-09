@@ -25,10 +25,6 @@
 #include <ctype.h>
 #include "config.h"
 
-#define BORDER_OFFSET 2      // Distance from edge for playable area
-#define ALIEN_AREA_START 2   // Where aliens can start moving
-#define ALIEN_AREA_END 17    // Where aliens must stop moving
-
 /**
  * @brief Structure representing a laser in the game.
  * 
@@ -100,8 +96,8 @@ typedef struct {
 
 
 // Extern variables that will be used in other files
-extern int game_over_server;
 extern char game_state_server[BUFFER_SIZE];
+extern int request_game_over;
 extern pthread_mutex_t server_lock;
 
 /**
@@ -192,11 +188,6 @@ int all_aliens_destroyed();
 void initialize_game_state();
 
 /**
- * @brief Sends the current game state to the clients.
- */
-void send_game_state();
-
-/**
  * @brief Checks if a move is valid for a player.
  * 
  * @param player Pointer to the player structure.
@@ -236,14 +227,27 @@ void update_alien_positions();
 void update_game_state();
 
 /**
- * @brief Sends the game over state to the clients.
+ * @brief Sends the current game state to all subscribers.
+ */
+void send_game_state();
+
+/**
+ * @brief Sends score updates to all score subscribers.
+ */
+void send_score_updates();
+
+/**
+ * @brief Sends the game over state to all subscribers.
  */
 void send_game_over_state();
 
 /**
- * @brief Cleans up resources used by the game.
+ * @brief Sets the game over flag to end the game.
+ *
+ * This function sets the game over flag to 1, indicating that the game has ended.
+ * It is used to stop the game logic loop .
  */
-void cleanup();
+void end_game_logic();
 
 /**
  * @brief Main game logic function.

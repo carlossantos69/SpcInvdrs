@@ -19,8 +19,9 @@
 // Game Limits and Rules
 #define LASER_COOLDOWN 3     // seconds between laser fires
 #define STUN_DURATION 10     // seconds an astronaut is stunned
-#define ALIEN_MOVE_INTERVAL 1 // seconds between alien movements
-#define ALIEN_RECOVERY_TIME 10 // seconds for alien to respawn
+#define ALIEN_MOVE_INTERVAL 1 // Time between alien movements (seconds)
+#define GAME_UPDATE_INTERVAL 0.05  // Time between game state updates (seconds)
+#define ALIEN_RECOVERY_TIME 10 // Time for alien to respawn (seconds)
 #define KILL_POINTS 1       // points for killing an alien
 
 // Network Configuration
@@ -39,6 +40,9 @@
 #define LASER_DURATION 0.5
 
 // UI Positions
+#define BORDER_OFFSET 2      // Distance from edge for playable area
+#define ALIEN_AREA_START 2   // Where aliens can start moving
+#define ALIEN_AREA_END 17    // Where aliens must stop moving
 #define SCORE_START_X (GRID_WIDTH + 6)
 #define LASER_HORIZONTAL '-'
 #define LASER_VERTICAL '|'
