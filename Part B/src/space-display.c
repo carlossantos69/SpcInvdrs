@@ -47,9 +47,8 @@ char game_state_display[BUFFER_SIZE];
 /**
  * @brief Initializes the display for the space game.
  *
- * This function sets up the ncurses environment, initializes color pairs,
- * clears the grid, initializes player scores, and draws the grid with row
- * and column numbers as well as a border around the grid.
+ * This function initializes color pairs, clears the grid, initializes player scores, 
+ * and draws the grid with row and column numbers as well as a border around the grid.
  *
  * The grid is initialized to empty spaces, and player scores are set to zero.
  * Row numbers are drawn on the left side of the grid, and column numbers are
@@ -114,6 +113,8 @@ void initialize_display() {
  * The game state string contains information about the game state, including player positions.
  * The string can either be passed from the server thread for the game-server.c application or
  * read via zeroMQ for outer-space-display.c. and astronaut-display-client.c applications.
+ * 
+ * @note This functions is not thread-safe and should be called with the display_lock mutex held.
  */
 void update_grid() {
     // Clear the grid first
@@ -208,6 +209,8 @@ void update_grid() {
  * The score area is cleared before displaying the scores, and a border 
  * is drawn around the scores area to visually separate it from other 
  * parts of the screen.
+ * 
+ * @note This functions is not thread-safe and should be called with the display_lock mutex held.
  */
 void draw_scores() {
     // Clear the score area first
@@ -270,6 +273,8 @@ void draw_scores() {
  * - Empty cells as spaces.
  *
  * The function also draws the scores and refreshes the screen.
+ * 
+ * @note This functions is not thread-safe and should be called with the display_lock mutex held.
  */
 void draw_grid(void) {
     for (int y = 0; y < GRID_HEIGHT; y++) {
@@ -315,6 +320,8 @@ void draw_grid(void) {
  * final scores of all active players. It waits for user input before exiting.
  *
  * It is called when the game ends to show the final results to the players.
+ * 
+ * @note This functions is not thread-safe.
  */
 void show_victory_screen() {
     // Clear the screen
@@ -372,6 +379,16 @@ void show_victory_screen() {
     refresh();
 }
 
+/**
+ * @brief Sets the game state display to the provided buffer content.
+ *
+ * This function locks the display mutex, copies the provided buffer content
+ * to the game state display, sets the state_changed flag to 1, signals the
+ * condition variable to indicate the state has changed, and then unlocks the
+ * display mutex.
+ *
+ * @param buffer A pointer to the buffer containing the new game state to display.
+ */
 void set_display_game_state(char* buffer) {
     pthread_mutex_lock(&display_lock);
     strcpy(game_state_display, buffer);
@@ -402,7 +419,6 @@ int display_main() {
         perror("Failed to initialize display_cond condition");
         return -1;
     }
-
 
     // Main loop
     while (!game_over_display) {
