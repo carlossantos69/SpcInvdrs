@@ -205,6 +205,7 @@ void* thread_heartbeat_routine(void* arg) {
             // Do not exit if game is over, will wait for input
             pthread_mutex_lock(&lock);
             if (thread_display_finished) {
+                // Do not timeout, server closed and we want to keep game over screen
                 pthread_mutex_unlock(&lock);
                 pthread_exit(NULL);
             }
@@ -218,6 +219,7 @@ void* thread_heartbeat_routine(void* arg) {
             // Do not exit if game is over, will wait for input
             pthread_mutex_lock(&lock);
             if (thread_display_finished) {
+                // Do not timeout, server closed and we want to keep game over screen
                 pthread_mutex_unlock(&lock);
                 pthread_exit(NULL);
             }

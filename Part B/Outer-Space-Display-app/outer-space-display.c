@@ -46,6 +46,16 @@ void cleanup() {
     pthread_mutex_destroy(&lock);
 }
 
+/**
+ * @brief Thread routine to handle communication with the server.
+ *
+ * This function continuously reads messages from the server using ZeroMQ and updates the display grid.
+ * It checks for termination conditions and handles various ZeroMQ errors appropriately.
+ * The function will exit the thread when the display is finished or if a critical error occurs.
+ *
+ * @param arg Unused argument.
+ * @return None.
+ */
 void *thread_comm_routine(void *arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -89,6 +99,15 @@ void *thread_comm_routine(void *arg) {
 }
 
 
+/**
+ * @brief Thread routine to handle the display.
+ *
+ * This function serves as the entry point for the display thread. It starts
+ * the display by calling `display_main()`.
+ * It will exit the thread when the display is finished.
+ *
+ * @param arg Unused argument.
+ */
 void *thread_display_routine(void *arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -103,6 +122,15 @@ void *thread_display_routine(void *arg) {
     pthread_exit(NULL);
 }
 
+/**
+ * @brief Thread routine to handle user input.
+ *
+ * This function continuously reads user input from the terminal. If the user
+ * presses 'q' or 'Q', the program will exit. It also checks if the display
+ * thread has finished and exits the program if so.
+ *
+ * @param arg Unused argument.
+ */
 void *thread_input_routine(void *arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -118,7 +146,7 @@ void *thread_input_routine(void *arg) {
             }
         }
 
-        // Exit the program is display thread has finished
+        // Exit the program if display thread has finished
         // Display thread finishes after game over screen is displayed
         pthread_mutex_lock(&lock);
         if (thread_display_finished) {
@@ -129,6 +157,14 @@ void *thread_input_routine(void *arg) {
     }
 }
 
+/**
+ * @brief Thread routine to handle heartbeat messages.
+ *
+ * This function continuously reads heartbeat messages from the server using ZeroMQ.
+ * If a heartbeat is not received or an invalid heartbeat is received, the program exits.
+ *
+ * @param arg Unused argument.
+ */
 void* thread_heartbeat_routine(void* arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -139,6 +175,7 @@ void* thread_heartbeat_routine(void* arg) {
         if (rc == -1) {
             pthread_mutex_lock(&lock);
             if (thread_display_finished) {
+                // Do not timeout, server closed and we want to keep game over screen
                 pthread_mutex_unlock(&lock);
                 pthread_exit(NULL);
             }
@@ -151,6 +188,7 @@ void* thread_heartbeat_routine(void* arg) {
         if (strcmp(buffer, "H") != 0) {
             pthread_mutex_lock(&lock);
             if (thread_display_finished) {
+                // Do not timeout, server closed and we want to keep game over screen
                 pthread_mutex_unlock(&lock);
                 pthread_exit(NULL);
             }
@@ -167,6 +205,14 @@ void* thread_heartbeat_routine(void* arg) {
 }
 
 
+/**
+ * @brief Main function for the outer space display application.
+ *
+ * This function initializes the ZeroMQ context and sockets, connects to the game server,
+ * and creates threads to handle communication, display, user input, and heartbeats.
+ *
+ * @return int Exit status of the program.
+ */
 int main() {
     // Initialize the mutex
     if (pthread_mutex_init(&lock, NULL) != 0) {
