@@ -46,7 +46,6 @@ void cleanup() {
     zmq_close(requester);
     zmq_ctx_destroy(context);
     zmq_ctx_term(context);
-    pthread_mutex_destroy(&client_lock);
     pthread_mutex_destroy(&lock);
     endwin();
 }
@@ -56,7 +55,7 @@ void *thread_client_routine(void *arg) {
     (void)arg;
 
     // Start the client
-    client_main(requester);
+    client_main(requester, 0);
 
     // Kill the program
     cleanup();
@@ -126,27 +125,11 @@ void *thread_input_routine(void *arg) {
     (void)arg;
 
     while (1) {
-        pthread_mutex_lock(&client_lock);
-
-        if (input_ready) {
-            int ch;
-            ch = getch();
-            if (ch == ERR) { // No key pressed
-                ch = 'q'; // Tell the client to quit
-            };
-
-            input_buffer = ch;
-            input_ready = 0;
+        int ch = getch();
+        if (ch == ERR) {
+            ch = 'q';
         }
-
-        if (output_ready) {
-            // Mark output processing as done
-            // Since we are in astronaut-display-client, 
-            // we do not output any client data, only outer-space-display
-            output_ready = 0;
-        }
-
-        pthread_mutex_unlock(&client_lock);
+        input_key(ch);
 
         // Exit the program is display thread has finished
         // Display thread finishes after game over screen is displayed

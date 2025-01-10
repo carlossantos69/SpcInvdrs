@@ -19,14 +19,8 @@
 #include "config.h"
 #include "pthread.h"
 
-// Extern variables that will be used in other files
-extern int input_buffer;
-extern char output_buffer_line1[BUFFER_SIZE];
-extern char output_buffer_line2[BUFFER_SIZE];
-extern int input_ready;
-extern int output_ready;
-extern pthread_mutex_t client_lock;
+void input_key(int ch);
 
-void client_main(void* requester);
+void client_main(void* requester, int ncurses);
 
 #endif

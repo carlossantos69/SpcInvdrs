@@ -26,18 +26,20 @@
 // ZeroMQ socket
 void* req;
 
-// Ncurses buffers and flags
-int input_buffer;
-char output_buffer_line1[BUFFER_SIZE];
-char output_buffer_line2[BUFFER_SIZE];
-int input_ready = 0; // 1 if client is ready to receive keypress input
-int output_ready = 0; // 1 if client has output to display
-pthread_mutex_t client_lock = PTHREAD_MUTEX_INITIALIZER;
+// Flag to indicate if ncurses is being used
+int show_ncurses;
 
 // Client state
 char player_id = '\0';
 int player_score = 0;
 char session_token[33]; // To store the session token received from the server
+
+// Key input and condition variable for client inputs to process
+int input_ch;
+int input_ready = 0; // Flag indicating there is an input ready to be processed
+pthread_mutex_t client_lock; // Mutex lock for client input
+pthread_cond_t input_cond;
+
 
 /**
  * @brief Constructs an error message based on the provided error code.
@@ -116,22 +118,30 @@ int send_connect_message() {
                 // Parse error
                 char error_msg[BUFFER_SIZE];
 
-                // Send error message to ncurses thread
-                pthread_mutex_lock(&client_lock);
-                sprintf(output_buffer_line1, "%s", error_msg);
-                sprintf(output_buffer_line2, " ");
-                output_ready = 1;
-                pthread_mutex_unlock(&client_lock);
+                // Update screen
+                if (show_ncurses) {
+                    move(0, 0);
+                    clrtoeol();
+                    mvprintw(0, 0, "%s", error_msg);
+                    move(2, 0);
+                    clrtoeol();
+                    mvprintw(2, 0, " ");
+                    refresh();
+                }
 
                 return -1;
             } 
 
-            // Send success message to ncurses thread
-            pthread_mutex_lock(&client_lock);
-            sprintf(output_buffer_line1, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", player_id, player_score);
-            sprintf(output_buffer_line2, " ");
-            output_ready = 1;
-            pthread_mutex_unlock(&client_lock);
+            // Update screen
+            if (show_ncurses) {
+                move(0, 0);
+                clrtoeol();
+                mvprintw(0, 0, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", player_id, player_score);
+                move(2, 0);
+                clrtoeol();
+                mvprintw(2, 0, " ");
+                refresh();
+            }
 
         }
 
@@ -150,39 +160,14 @@ int send_connect_message() {
  * and processes the user input based on the key pressed. It sends the appropriate
  * command to the server using ZeroMQ and updates the player's score based on the server's response.
  * 
+ * @note This function is not thread-safe.
+ * 
  * Returns 1 if client exits, 0 if client continues, or -1 if an error occurs(invalid move/zap etc.. is not considered an error).
  */
 int handle_key_input() {
-    // Wait for text output to be displayed
-    // This is necessary to prevent locking in getch() without displaying the output first
-    while(1) {
-        pthread_mutex_lock(&client_lock);
-        if (output_ready == 0) {
-            break;
-        }
-        pthread_mutex_unlock(&client_lock);
-    }
-
-
-    // Mark input as ready
-    input_ready = 1;
-    pthread_mutex_unlock(&client_lock);
-
-
-    // Lock until ncurse thread sends input
-    while(1) {
-        pthread_mutex_lock(&client_lock);
-
-        if (input_ready == 0) {
-            // No mutex unlock here, as we will continue doing more work
-            break;
-        }
-        pthread_mutex_unlock(&client_lock);
-    }
-
     // Process user input
     char buffer[BUFFER_SIZE];
-    switch (input_buffer) {
+    switch (input_ch) {
         case KEY_UP:
             snprintf(buffer, sizeof(buffer), "%c %c %s %c", CMD_MOVE, player_id, session_token, MOVE_UP);
             zmq_send(req, buffer, strlen(buffer), 0);
@@ -207,16 +192,12 @@ int handle_key_input() {
         case 'Q':
             snprintf(buffer, sizeof(buffer), "%c %c %s", CMD_DISCONNECT, player_id, session_token);
             zmq_send(req, buffer, strlen(buffer), 0);
-            pthread_mutex_unlock(&client_lock); // Should not be needed because client_main will return aswell
             return 1;
             break;
         default:
             // Ignore other keys
-            pthread_mutex_unlock(&client_lock); // Unlock mutex before returning
             return 0;
     }
-
-    pthread_mutex_unlock(&client_lock);
 
     // Receive response from the server
     int recv_size = zmq_recv(req, buffer, sizeof(buffer) - 1, 0);
@@ -232,21 +213,30 @@ int handle_key_input() {
                 char error_msg[BUFFER_SIZE-25];
                 find_error(response, error_msg);
 
-                // Send error message to ncurses thread
-                pthread_mutex_lock(&client_lock);
-                sprintf(output_buffer_line1, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", player_id, player_score);
-                sprintf(output_buffer_line2, "Last action failed: %s ", error_msg);
-                output_ready = 1;
-                pthread_mutex_unlock(&client_lock);
+
+                // Update screen
+                if (show_ncurses) {
+                    move(0, 0);
+                    clrtoeol();
+                    mvprintw(0, 0, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", player_id, player_score);
+                    move(2, 0);
+                    clrtoeol();
+                    mvprintw(2, 0, "Last action failed: %s ", error_msg);
+                    refresh();
+                }
                 return 0;
             }
 
-            // Send new text to ncurses thread
-            pthread_mutex_lock(&client_lock);
-            sprintf(output_buffer_line1, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", player_id, player_score);
-            sprintf(output_buffer_line2, " ");
-            output_ready = 1;
-            pthread_mutex_unlock(&client_lock);
+            // Update screen
+            if (show_ncurses) {
+                move(0, 0);
+                clrtoeol();
+                mvprintw(0, 0, "Astronaut %c | Score: %d | Use arrow keys to move, space to fire laser, 'q' to quit", player_id, player_score);
+                move(2, 0);
+                clrtoeol();
+                mvprintw(2, 0, " ");
+                refresh();
+            }
 
             return 0;
         }
@@ -259,24 +249,57 @@ int handle_key_input() {
     return -1;
 }
 
-void client_main(void* requester) {
+void input_key(int ch) {
+    pthread_mutex_lock(&client_lock);
+    input_ch = ch;
+    input_ready = 1;
+    pthread_cond_signal(&input_cond);
+    pthread_mutex_unlock(&client_lock);
+}
+
+void client_main(void* requester, int ncurses) {
     req = requester;
 
     int ret;
+    show_ncurses = ncurses;
+
+    // Initialize mutex and condition variables
+    if (pthread_mutex_init(&client_lock, NULL) != 0) {
+        perror("Client Mutex init failed");
+        return;
+    }
+    if (pthread_cond_init(&input_cond, NULL) != 0) {
+        perror("Client input Condition variable init failed");
+        return;
+    }
+
 
     // Send connect message and receive player ID
     ret = send_connect_message();
     if (ret == -1) {
-        return; // Void return, no error code
+        perror("Failed to connect to server");
+        return;
     }
     
     // Main client loop
     while(1) {
+        pthread_mutex_lock(&client_lock);
+        while (!input_ready) {
+            pthread_cond_wait(&input_cond, &client_lock);
+        }
+        input_ready = 0;
+
+
         ret = handle_key_input();
+        pthread_mutex_unlock(&client_lock);
         if (ret == 1 || ret == -1) {
             return; // Void return, no error code
         }
-        usleep(10000); // 10ms delay to prevent busy waiting
     }
 
+    // Cleanup
+    pthread_mutex_destroy(&client_lock);
+    pthread_cond_destroy(&input_cond);
+
+    return;
 }

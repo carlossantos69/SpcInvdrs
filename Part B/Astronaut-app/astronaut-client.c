@@ -46,60 +46,28 @@ void *thread_client_routine(void *arg) {
     (void)arg;
 
     // Start the client
-    client_main(requester);
+    client_main(requester, 1);
 
     // Kill the program
     cleanup();
     exit(0);
 }
 
-void *thread_ncurses_routine(void *arg) {
+void *thread_input_routine(void *arg) {
     // Avoid unused argument warning
     (void)arg;
 
-    // Initialize ncurses
-    initscr();
-    noecho();
-    cbreak();
-    keypad(stdscr, TRUE);
-
-
     while(1) {
-        pthread_mutex_lock(&client_lock);
-
-        if (input_ready) {
-            // Read char from user
-            int ch = getch();
-            if (ch == ERR) { // No key pressed
-                ch = 'q'; // Tell the client to quit
-            };
-
-            input_buffer = ch;
-            input_ready = 0;
+        int ch = getch();
+        if (ch == ERR) {
+            ch = 'q';
         }
-        if (output_ready) {
-            // Update display
-
-            // Update line 1
-            move(0, 0);
-            clrtoeol();
-            mvprintw(0, 0, "%s", output_buffer_line1);
-
-            // Line 2
-            move(2, 0);
-            clrtoeol();
-            mvprintw(2, 0, "%s", output_buffer_line2);
-            refresh();
-
-            output_ready = 0;
-        }
-
-        pthread_mutex_unlock(&client_lock);
+        input_key(ch);
     }
 
 
     // Exit thread
-    // Note: program should not reach this point, as other threads will manage program exit
+    // Note: program should not reach this point
     pthread_exit(NULL);
 }
 
@@ -124,6 +92,7 @@ void* thread_heartbeat_routine(void* arg) {
     }
 
     // End thread
+    // Note: program should not reach this point
     pthread_exit(NULL);
 }
 
@@ -161,10 +130,15 @@ int main() {
     int timeout = HEARTBEAT_FREQUENCY*2*1000; // Accepting one missed heartbeat
     zmq_setsockopt(heartbeat_subscriber, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
 
+    // Initialize ncurses
+    initscr();
+    noecho();
+    cbreak();
+    keypad(stdscr, TRUE);
 
     // Create threads
     pthread_t thread_client;
-    pthread_t thread_ncurses;
+    pthread_t thread_input;
     pthread_t thread_heartbeat;
     int ret;
 
@@ -173,7 +147,7 @@ int main() {
         perror("Failed to create thread_client");
         return 1;
     }
-    ret = pthread_create(&thread_ncurses, NULL, thread_ncurses_routine, NULL);
+    ret = pthread_create(&thread_input, NULL, thread_input_routine, NULL);
     if (ret != 0) {
         perror("Failed to create thread_ncurses");
         return 1;
@@ -187,7 +161,7 @@ int main() {
     // Wait for threads to finish
     // Note: program should not reach this point, as threads will manage program exit
     pthread_join(thread_client, NULL);
-    pthread_join(thread_ncurses, NULL);
+    pthread_join(thread_input, NULL);
 
     cleanup();
     exit(0);
