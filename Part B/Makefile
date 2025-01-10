@@ -25,6 +25,11 @@ COMMON_OBJS = $(COMMON_SRCS:.c=.o)
 
 # Targets
 all: astronaut-client astronaut-display-client game-server outer-space-display
+	rm -f $(ASTRONAUT_CLIENT_OBJS) \
+		$(ASTRONAUT_DISPLAY_CLIENT_OBJS) \
+		$(GAME_SERVER_OBJS) \
+		$(OUTER_SPACE_DISPLAY_OBJS) \
+		$(COMMON_OBJS)
 
 astronaut-client: $(ASTRONAUT_CLIENT_OBJS) $(COMMON_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
@@ -65,4 +70,4 @@ help:
 	@echo "  all             - Build all components"
 	@echo "  clean           - Remove compiled binaries"
 	@echo "  install-deps    - Install development dependencies"
-	@echo "  run             - Show instructions to run game"
+	@echo "  run             - Show instructions to run game"lay-client instances"
