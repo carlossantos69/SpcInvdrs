@@ -1,3 +1,19 @@
+"""
+PSIS 2024/2025 - Project Part 2
+
+Filename: space-high-scores.py
+
+Authors:
+- Carlos Santos - 102985 - carlos.r.santos@tecnico.ulisboa.pt
+- Tomas Corral  - 102446 - tomas.corral@tecnico.ulisboa.pt
+
+Group ID: 20
+
+Description:
+Code that handles high score updates display. Receives updates from the server.
+"""
+
+
 import zmq
 from scores_pb2 import ScoreUpdate
 
