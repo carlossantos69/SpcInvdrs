@@ -43,7 +43,6 @@ bool thread_display_finished = false;
 void cleanup() {
     // We need to wait for the display thread to finish message processing
     zmq_close(subscriber);
-
     zmq_close(requester);
     zmq_ctx_destroy(context);
     zmq_ctx_term(context);
@@ -112,6 +111,8 @@ void *thread_display_routine(void *arg) {
 
     // Start the display
     display_main();
+
+    sleep(1); // ! Workaround to avoid astronaut-display-client exiting before the next getch()
 
     // End thread
     pthread_mutex_lock(&lock);

@@ -32,7 +32,7 @@ char output_buffer_line1[BUFFER_SIZE];
 char output_buffer_line2[BUFFER_SIZE];
 int input_ready = 0; // 1 if client is ready to receive keypress input
 int output_ready = 0; // 1 if client has output to display
-pthread_mutex_t client_lock = PTHREAD_MUTEX_INITIALIZER; //TODO: rename to client_lock
+pthread_mutex_t client_lock = PTHREAD_MUTEX_INITIALIZER;
 
 // Client state
 char player_id = '\0';
