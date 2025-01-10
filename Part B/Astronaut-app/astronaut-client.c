@@ -29,12 +29,26 @@ void* context;
 void* requester;
 void* subscriber_heartbeat;
 
+/**
+ * @brief Cleans up resources before the program exits.
+ * 
+ * This function performs cleanup operations by ending the ncurses window
+ * and closing the ZeroMQ sockets for the requester and subscriber heartbeat.
+ */
 void cleanup() {
     endwin();
     zmq_close(requester);
     zmq_close(subscriber_heartbeat);
 }
 
+/**
+ * @brief Thread routine for the client.
+ *
+ * This function serves as the entry point for a client thread. It starts the client
+ * by calling `client_main` and then performs cleanup before terminating the program.
+ *
+ * @param arg Unused argument.
+ */
 void *thread_client_routine(void *arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -47,6 +61,17 @@ void *thread_client_routine(void *arg) {
     exit(0);
 }
 
+/**
+ * @brief Thread routine to handle input from the user.
+ *
+ * This function runs in an infinite loop, continuously reading input characters
+ * using the `getch()` function. The input character is then passed to the `input_key()` function.
+ *
+ * It blocks in getch() until a key is pressed.
+ * It blocks in input_key() until the client thread process the key request
+ * 
+ * @param arg Unused argument.
+ */
 void *thread_input_routine(void *arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -65,6 +90,17 @@ void *thread_input_routine(void *arg) {
     pthread_exit(NULL);
 }
 
+/**
+ * @brief Thread routine to handle heartbeat messages.
+ *
+ * This function runs in an infinite loop, receiving heartbeat messages
+ * from a ZeroMQ subscriber socket. If a message is received that is not
+ * the expected heartbeat ("H"), the function logs an error, performs
+ * cleanup, and exits the program.
+ *
+ * @param arg Unused argument.
+ * @return This function does not return.
+ */
 void* thread_heartbeat_routine(void* arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -90,13 +126,15 @@ void* thread_heartbeat_routine(void* arg) {
     pthread_exit(NULL);
 }
 
+
 /**
  * @brief Main function for the astronaut client application.
  * 
- * This function initializes the ncurses library for handling terminal input/output,
- * sets up a ZeroMQ context and socket for communication with the server, and enters
- * the main game loop where it handles key input and sends messages to the server.
- * thread_client_routine
+ * This function initializes ZeroMQ context and sockets, sets up ncurses for
+ * terminal handling, and creates threads for client communication, input handling,
+ * and heartbeat monitoring. It connects to the game server's REQ/REP and PUB sockets.
+ * The function then creates and starts the necessary threads and waits for them to finish.
+ * 
  * @return int Exit status of the program.
  */
 int main() {
