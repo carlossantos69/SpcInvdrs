@@ -50,6 +50,14 @@ void cleanup() {
     pthread_mutex_destroy(&lock);
 }
 
+/**
+ * @brief Thread routine for the client.
+ *
+ * This function serves as the entry point for a client thread. It starts the client
+ * by calling `client_main` and then performs cleanup before terminating the program.
+ *
+ * @param arg Unused argument.
+ */
 void *thread_client_routine(void *arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -62,6 +70,17 @@ void *thread_client_routine(void *arg) {
     exit(0);
 }
 
+/**
+ * @brief Thread routine for communication with the server.
+ *
+ * This function runs in a separate thread and continuously reads messages
+ * from the server to update the display grid. It handles various errors
+ * that may occur during message reception and ensures proper cleanup
+ * before exiting.
+ *
+ * @param arg Unused argument.
+ * @return void* Always returns NULL.
+ */
 void *thread_comm_routine(void *arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -104,6 +123,16 @@ void *thread_comm_routine(void *arg) {
     pthread_exit(NULL);
 }
 
+/**
+ * @brief Thread routine to handle the display.
+ *
+ * This function serves as the entry point for a thread that manages the display.
+ * It is the main signal to exit the application, as it will only finish after the
+ * game over screen is displayed.
+ *
+ * @param arg Unused argument.
+ * @return None.
+ */
 void *thread_display_routine(void *arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -120,6 +149,17 @@ void *thread_display_routine(void *arg) {
     pthread_exit(NULL);
 }
 
+/**
+ * @brief Thread routine to handle input from the user.
+ *
+ * This function runs in an infinite loop, continuously reading input characters
+ * using the `getch()` function. The input character is then passed to the `input_key()` function.
+ *
+ * It blocks in getch() until a key is pressed.
+ * It blocks in input_key() until the client thread process the key request
+ * 
+ * @param arg Unused argument.
+ */
 void *thread_input_routine(void *arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -143,6 +183,17 @@ void *thread_input_routine(void *arg) {
     }
 }
 
+/**
+ * @brief Thread routine to handle heartbeat messages.
+ *
+ * This function runs in an infinite loop, receiving heartbeat messages
+ * from a ZeroMQ subscriber socket. If a message is received that is not
+ * the expected heartbeat ("H"), the function logs an error, performs
+ * cleanup, and exits the program.
+ *
+ * @param arg Unused argument.
+ * @return This function does not return.
+ */
 void* thread_heartbeat_routine(void* arg) {
     // Avoid unused argument warning
     (void)arg;

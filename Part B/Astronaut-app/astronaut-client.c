@@ -127,14 +127,14 @@ void* thread_heartbeat_routine(void* arg) {
 }
 
 
+
 /**
  * @brief Main function for the astronaut client application.
- * 
- * This function initializes ZeroMQ context and sockets, sets up ncurses for
- * terminal handling, and creates threads for client communication, input handling,
- * and heartbeat monitoring. It connects to the game server's REQ/REP and PUB sockets.
- * The function then creates and starts the necessary threads and waits for them to finish.
- * 
+ *
+ * This function initializes the ZeroMQ context and sockets, connects to the game server,
+ * sets up ncurses for terminal handling, and creates three threads for client operations,
+ * input handling, and heartbeat monitoring.
+ *
  * @return int Exit status of the program.
  */
 int main() {
