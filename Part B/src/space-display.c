@@ -425,8 +425,8 @@ int display_main() {
     // Show victory screen if game_over flag is set
     show_victory_screen();
 
-    // Destroy mutex
-    // TODO: Some mutexes can be blocked so this will block not returning the function. Fix later
+    // Note: Not destroying mutexes because they can be blocked
+    // Note: Not problem because function will exit and this code will not be used after game over screen
     //pthread_mutex_destroy(&display_lock);
     //pthread_cond_destroy(&state_changed_cond);
 

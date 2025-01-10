@@ -108,7 +108,8 @@ void* thread_display_data_routine(void* arg) {
         get_server_game_state(buffer);
         set_display_game_state(buffer);
 
-        // TODO: Solve active waiting
+        // Note: No need to sleep here, function will not active wait
+        //  because it will be blocked in get_server_game_state or set_display_game_state and only unblocks when data is received/sent
 
     }
 

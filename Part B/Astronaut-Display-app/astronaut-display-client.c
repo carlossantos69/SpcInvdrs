@@ -111,7 +111,7 @@ void *thread_display_routine(void *arg) {
     // Start the display
     display_main();
 
-    sleep(1); // ! Workaround to avoid astronaut-display-client exiting before the next getch()
+    sleep(1); // This a workaround to avoid the program exiting before the next getch(). Improve later
 
     // End thread
     pthread_mutex_lock(&lock);
@@ -131,13 +131,8 @@ void *thread_input_routine(void *arg) {
         }
         input_key(ch);
 
-        // Exit the program is display thread has finished
+        // Exit the program if display thread has finished
         // Display thread finishes after game over screen is displayed
-        // TODO: Error here, the program exists right away, 
-        // TODO: possibly because thread_display_finished is set before the next getch() 
-        // TODO: If thread_display_finished is set before the next getch(), the program will exit
-
-        
         pthread_mutex_lock(&lock);
         if (thread_display_finished) {
             cleanup();
