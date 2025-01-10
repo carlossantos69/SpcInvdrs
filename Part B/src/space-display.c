@@ -1,7 +1,7 @@
 /*
- * PSIS 2024/2025 - Project Part 1
+ * PSIS 2024/2025 - Project Part 2
  *
- * Filename: game-logic.c
+ * Filename: space-display.c
  *
  * Authors:
  * - Carlos Santos - 102985 - carlos.r.santos@tecnico.ulisboa.pt

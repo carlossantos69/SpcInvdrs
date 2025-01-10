@@ -1,5 +1,5 @@
 /*
- * PSIS 2024/2025 - Project Part 1
+ * PSIS 2024/2025 - Project Part 2
  *
  * Filename: astronaut-display-cient.c
  *
