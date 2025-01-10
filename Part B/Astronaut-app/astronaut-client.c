@@ -31,14 +31,10 @@ void* heartbeat_subscriber;
 
 void cleanup() {
     endwin();
-    printf("DEBUG1\n");
     zmq_close(requester);
-    printf("DEBUG2\n");
     zmq_close(heartbeat_subscriber);
-    printf("DEBUG3\n");
-    zmq_ctx_destroy(context);
-    printf("DEBUG4\n");
-    zmq_ctx_term(context);
+    //zmq_ctx_destroy(context);
+    //zmq_ctx_term(context);
 }
 
 void *thread_client_routine(void *arg) {
@@ -118,14 +114,14 @@ int main() {
         exit(1);
     }
 
-    // Connect to server's PUB socket
+    // Connect to server's heartbeat PUB socket
     if (zmq_connect(heartbeat_subscriber, CLIENT_CONNECT_HEARTBEAT) != 0) {
         perror("Failed to connect to game server");
         cleanup();
         exit(1);
     }
 
-    // Subscribe to all messages
+    // Subscribe to heartbeat messages
     zmq_setsockopt(heartbeat_subscriber, ZMQ_SUBSCRIBE, "", 0);
     int timeout = HEARTBEAT_FREQUENCY*2*1000; // Accepting one missed heartbeat
     zmq_setsockopt(heartbeat_subscriber, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));

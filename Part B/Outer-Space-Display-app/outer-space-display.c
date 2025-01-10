@@ -26,6 +26,7 @@
 // ZeroMQ subscriber socket
 void* context;
 void* subscriber;
+void* subscriber_heartbeat;
 
 // Flags to indicate thread ending
 pthread_mutex_t lock;
@@ -39,11 +40,12 @@ bool thread_display_finished = false;
  * ncurses window session.
  */
 void cleanup() {
-    zmq_close(subscriber);
-    zmq_ctx_destroy(context);
-    zmq_ctx_term(context);
-    pthread_mutex_destroy(&lock);
     endwin();
+    zmq_close(subscriber);
+    zmq_close(subscriber_heartbeat);
+    //zmq_ctx_destroy(context);
+    //zmq_ctx_term(context);
+    pthread_mutex_destroy(&lock);
 }
 
 void *thread_comm_routine(void *arg) {
@@ -129,11 +131,37 @@ void *thread_input_routine(void *arg) {
     }
 }
 
+void* thread_heartbeat_routine(void* arg) {
+    // Avoid unused argument warning
+    (void)arg;
+
+    while (1) {
+        char buffer[2];
+        int rc = zmq_recv(subscriber_heartbeat, buffer, 1, 0);
+        if (rc == -1) {
+            perror("Failed to receive heartbeat");
+            cleanup();
+            exit(1);
+        }
+        buffer[rc] = '\0';
+        if (strcmp(buffer, "H") != 0) {
+            fprintf(stderr, "Invalid heartbeat received\n");
+            cleanup();
+            exit(1);
+        }
+    }
+
+    // End thread
+    // Note: program should not reach this point
+    pthread_exit(NULL);
+}
+
 
 int main() {
     pthread_t thread_comm;
     pthread_t thread_display;
     pthread_t thread_input;
+    pthread_t thread_heartbeat;
     int ret;
 
     // Initialize the mutex
@@ -146,6 +174,7 @@ int main() {
     // Initialize ZeroMQ
     context = zmq_ctx_new();
     subscriber = zmq_socket(context, ZMQ_SUB);
+    subscriber_heartbeat = zmq_socket(context, ZMQ_SUB);
 
     // Connect to server's PUB socket
     if (zmq_connect(subscriber, CLIENT_CONNECT_SUB) != 0) {
@@ -156,6 +185,18 @@ int main() {
 
     // Subscribe to all messages
     zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, "", 0);
+
+    // Connect to server's heartbeat PUB socket
+    if (zmq_connect(subscriber_heartbeat, CLIENT_CONNECT_HEARTBEAT) != 0) {
+        perror("Failed to connect to game server");
+        cleanup();
+        exit(1);
+    }
+
+    // Subscribe to heartbeat messages
+    zmq_setsockopt(subscriber_heartbeat, ZMQ_SUBSCRIBE, "", 0);
+    int timeout = HEARTBEAT_FREQUENCY*2*1000; // Accepting one missed heartbeat
+    zmq_setsockopt(subscriber_heartbeat, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
 
     // Create the threads
     ret = pthread_create(&thread_comm, NULL, thread_comm_routine, NULL);
@@ -171,6 +212,11 @@ int main() {
     ret = pthread_create(&thread_input, NULL, thread_input_routine, NULL);
     if (ret != 0) {
         perror("Failed to create thread_input");
+        return 1;
+    }
+    ret = pthread_create(&thread_heartbeat, NULL, thread_heartbeat_routine, NULL);
+    if (ret != 0) {
+        perror("Failed to create thread_heartbeat");
         return 1;
     }
 
