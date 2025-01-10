@@ -39,14 +39,9 @@ bool thread_display_finished = false;
  * ncurses window session.
  */
 void cleanup() {
-    // We need to wait for the display thread to finish message processing
-    pthread_mutex_lock(&display_lock);
     zmq_close(subscriber);
-    pthread_mutex_unlock(&display_lock);
-    
     zmq_ctx_destroy(context);
     zmq_ctx_term(context);
-    pthread_mutex_destroy(&display_lock);
     pthread_mutex_destroy(&lock);
     endwin();
 }
@@ -69,11 +64,8 @@ void *thread_comm_routine(void *arg) {
         int recv_size = zmq_recv(subscriber, buffer, sizeof(buffer) - 1, ZMQ_DONTWAIT);
         if (recv_size != -1) {
             buffer[recv_size] = '\0';
-            pthread_mutex_lock(&display_lock);
-            // Copy the message to shared memory
-            // Note: this string defines the game state. state-display.c will parse it
-            strcpy(game_state_display, buffer);
-            pthread_mutex_unlock(&display_lock);
+            // Copy the message to display
+            set_display_game_state(buffer);
         } else {
             int err = zmq_errno();
             if (err == EAGAIN) {

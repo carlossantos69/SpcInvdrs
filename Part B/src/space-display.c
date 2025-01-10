@@ -26,11 +26,16 @@ disp_Player_t players_disp[MAX_PLAYERS];
 // 2D array to represent the game grid
 disp_Cell_t grid[GRID_HEIGHT][GRID_WIDTH];
 
-// Flag indicating whether the game over display is active
+// Flag indicating whether the game is over
 int game_over_display = 0;
 
-// Mutex for display data
-pthread_mutex_t display_lock = PTHREAD_MUTEX_INITIALIZER;
+// Mutex for internal display data
+pthread_mutex_t display_lock;
+
+// Flag to request the display to update the game grid
+int state_changed = 0;
+// Condition variable to signal display
+pthread_cond_t state_changed_cond;
 
 // This string is parsed to obtain the grid and player data
 //The game state string contains information about the game state, including player positions.
@@ -375,6 +380,13 @@ void show_victory_screen() {
     refresh();
 }
 
+void set_display_game_state(char* buffer) {
+    pthread_mutex_lock(&display_lock);
+    strcpy(game_state_display, buffer);
+    state_changed = 1;
+    pthread_cond_signal(&state_changed_cond);
+    pthread_mutex_unlock(&display_lock);
+}
 
 /**
  * @brief Main display function that initializes the display and handles the main display loop.
@@ -383,22 +395,48 @@ void show_victory_screen() {
  * The grid and display info should be modified in memory using the mutex in .h file. This function only draws the screen. External code must update the grid.
  * When the game is over, it shows the victory screen.
  *
+ * @return Returns 0 if no error, -1 otherwise.
  */
-void display_main() {
+int display_main() {
     // Initialize the display
     initialize_display();
+
+    // Initialize Mutex
+    if (pthread_mutex_init(&display_lock, NULL) != 0) {
+        perror("Failed to initialize display_lock mutex");
+        return -1;
+    }
+    if (pthread_cond_init(&state_changed_cond, NULL) != 0) {
+        perror("Failed to initialize display_cond condition");
+        return -1;
+    }
+
 
     // Main loop
     while (!game_over_display) {
         // Read buffer data and update the grid
         pthread_mutex_lock(&display_lock);
+
+        // Wait for the state to change, no active waiting
+        while (!state_changed) {
+            pthread_cond_wait(&state_changed_cond, &display_lock);
+        }
+
+        // Update the grid and draw it
         update_grid();
         draw_grid();
-        pthread_mutex_unlock(&display_lock);
 
-        usleep(50000); // 50ms delay
+        state_changed = 0;
+        pthread_mutex_unlock(&display_lock);
     }
 
     // Show victory screen if game_over flag is set
     show_victory_screen();
+
+    // Destroy mutex
+    // TODO: Some mutexes can be blocked so this will block not returning the function. Fix later
+    //pthread_mutex_destroy(&display_lock);
+    //pthread_cond_destroy(&state_changed_cond);
+
+    return 0;
 }

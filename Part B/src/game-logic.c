@@ -33,7 +33,7 @@ Player_t players[MAX_PLAYERS];
 Alien_t aliens[MAX_ALIENS];
 
 // Indicates whether the game is over or not
-int game_over = 0;
+int game_over_server = 0;
 
 // Flag to request the publisher thread to send new game data
 int request_publish = 0;
@@ -766,7 +766,7 @@ void update_game_state() {
 
     // Check if all aliens are destroyed
     if (all_aliens_destroyed()) {
-        game_over = 1; // Set a game over flag
+        game_over_server = 1; // Set a game over flag
     }
 }
 
@@ -940,7 +940,7 @@ void* thread_alien_routine(void* arg) {
     // Avoid unused parameter warning
     (void)arg;
 
-    while (!game_over) { // TODO: Mutex needed?
+    while (!game_over_server) { // TODO: Mutex needed?
         pthread_mutex_lock(&server_lock);
         // Update aliens positions
         update_alien_positions();
@@ -967,7 +967,7 @@ void* thread_updater_routine(void* arg) {
     // Avoid unused parameter warning
     (void)arg;
 
-    while (!game_over) { // TODO: Mutex needed?
+    while (!game_over_server) { // TODO: Mutex needed?
         pthread_mutex_lock(&server_lock);
         if (has_duration_passed(last_update_time, GAME_UPDATE_INTERVAL / 1000.0)) {
             last_update_time = get_time_in_seconds();
@@ -998,7 +998,7 @@ void* thread_listener_routine(void* arg) {
     // Avoid unused parameter warning
     (void)arg;
 
-    while (!game_over) { // TODO: Mutex needed?
+    while (!game_over_server) { // TODO: Mutex needed?
         // Define safer buffer sizes
         char buffer[BUFFER_SIZE] = {0};
 
@@ -1039,7 +1039,7 @@ void* thread_publisher_routine(void* arg) {
     // Avoid unused parameter warning
     (void)arg;
 
-    while(!game_over) {
+    while(!game_over_server) {
 
         pthread_mutex_lock(&server_lock);
 
@@ -1073,7 +1073,7 @@ void* thread_publisher_routine(void* arg) {
  */
 void end_server_logic(){
     pthread_mutex_lock(&server_lock);
-    game_over = 1;
+    game_over_server = 1;
     pthread_mutex_unlock(&server_lock);
 }
 
@@ -1152,9 +1152,10 @@ int server_logic(void* responder, void* publisher, void* score_publisher) {
 
 
     // Destroy mutexes and conditions
-    pthread_mutex_destroy(&server_lock);
-    pthread_mutex_destroy(&game_state_lock);
-    pthread_cond_destroy(&publish_cond);
+    // TODO: Some mutexes can be blocked so this will block not returning the function. Fix later
+    //pthread_mutex_destroy(&server_lock);
+    //pthread_mutex_destroy(&game_state_lock);
+    //pthread_cond_destroy(&publish_cond);
 
     return 0;
 }

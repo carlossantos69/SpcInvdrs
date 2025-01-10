@@ -45,12 +45,6 @@ typedef struct {
     char ch;
 } disp_Cell_t;
 
-
-// Extern variables that will be used in other files
-extern char game_state_display[BUFFER_SIZE];
-extern pthread_mutex_t display_lock;
-
-
 /**
  * @brief Initializes the display for the game.
  * 
@@ -90,6 +84,8 @@ void draw_grid();
  */
 void show_victory_screen();
 
+void set_display_game_state(char* buffer);
+
 /**
  * @brief Main display function.
  * 
@@ -97,7 +93,9 @@ void show_victory_screen();
  * 
  * This function is the main entry point for the display module, handling
  * the overall display logic and coordination.
+ * 
+ * @return Returns 0 if no error, -1 otherwise.
  */
-void display_main();
+int display_main();
 
 #endif

@@ -30,7 +30,7 @@ void* subscriber;
 void* requester;
 
 // Flags to indicate thread ending
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t lock;
 bool thread_display_finished = false;
 
 /**
@@ -42,14 +42,11 @@ bool thread_display_finished = false;
  */
 void cleanup() {
     // We need to wait for the display thread to finish message processing
-    pthread_mutex_lock(&display_lock);
     zmq_close(subscriber);
-    pthread_mutex_unlock(&display_lock);
 
     zmq_close(requester);
     zmq_ctx_destroy(context);
     zmq_ctx_term(context);
-    pthread_mutex_destroy(&display_lock);
     pthread_mutex_destroy(&client_lock);
     pthread_mutex_destroy(&lock);
     endwin();
@@ -85,11 +82,8 @@ void *thread_comm_routine(void *arg) {
         int recv_size = zmq_recv(subscriber, buffer, sizeof(buffer) - 1, ZMQ_DONTWAIT);
         if (recv_size != -1) {
             buffer[recv_size] = '\0';
-            pthread_mutex_lock(&display_lock);
-            // Copy the message to shared memory
-            // Note: this string defines the game state. space-display.c will parse it
-            strcpy(game_state_display, buffer);
-            pthread_mutex_unlock(&display_lock);
+            // Copy the message to display
+            set_display_game_state(buffer);
         } else {
             int err = zmq_errno();
             if (err == EAGAIN) {
@@ -155,6 +149,9 @@ void *thread_input_routine(void *arg) {
 
         // Exit the program is display thread has finished
         // Display thread finishes after game over screen is displayed
+        // TODO: Error here, the program exists right away, 
+        // TODO: possibly because thread_display_finished is set before the next getch() 
+        // TODO: If thread_display_finished is set before the next getch(), the program will exit
         pthread_mutex_lock(&lock);
         if (thread_display_finished) {
             cleanup();
@@ -180,6 +177,13 @@ int main() {
     pthread_t thread_display;
     pthread_t thread_input;
     int ret;
+
+    // Initialize the mutexes
+    if (pthread_mutex_init(&lock, NULL) != 0) {
+        perror("Mutex init failed");
+        cleanup();
+        exit(1);
+    }
 
     // Initialize ZeroMQ
     context = zmq_ctx_new();

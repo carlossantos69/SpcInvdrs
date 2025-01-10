@@ -30,7 +30,7 @@ void* publisher;  // For PUB/SUB with display
 void* scores_publisher;  // For PUB/SUB with scores
 
 // Flags to indicate thread ending
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t lock;
 bool thread_server_finished = false;
 bool thread_display_finished = false;
 
@@ -40,7 +40,6 @@ void cleanup() {
     zmq_close(scores_publisher);
     zmq_ctx_destroy(context);
     zmq_ctx_term(context);
-    pthread_mutex_destroy(&display_lock);
     pthread_mutex_destroy(&lock);
     endwin();
 }
@@ -84,19 +83,16 @@ void* thread_display_data_routine(void* arg) {
         // This bypasses the use of sockets for the display created by the game server
         char buffer[BUFFER_SIZE];
         get_server_game_state(buffer);
+        set_display_game_state(buffer);
 
-        // Copy the game state string in the server to the display
-        // Display will then parse it to get the state
-        // This bypasses the use of sockets for the display created by the game server
-        pthread_mutex_lock(&display_lock);
-        strcpy(game_state_display, buffer);
-        pthread_mutex_unlock(&display_lock);
+        // TODO: Solve active waiting
 
     }
 
     // End thread
     pthread_exit(NULL);
 }
+
 
 void* thread_display_routine(void* arg) {
     // Avoid unused argument warning
@@ -179,33 +175,37 @@ int main() {
     scores_publisher = zmq_socket(context, ZMQ_PUB);
     zmq_bind(scores_publisher, SERVER_ENDPOINT_SCORES);
 
-
-    // Initialize the mutexes
-    if (pthread_mutex_init(&display_lock, NULL) != 0) {
+    // Initialize the mutex
+    if (pthread_mutex_init(&lock, NULL) != 0) {
         perror("Mutex init failed");
-        return EXIT_FAILURE;
+        cleanup();
+        exit(1);
     }
 
     // Create the threads
     ret = pthread_create(&thread_server, NULL, thread_server_routine, NULL);
     if (ret != 0) {
         perror("Failed to create thread_server");
-        return 1;
+        cleanup();
+        exit(1);
     }
     ret = pthread_create(&thread_display_data, NULL, thread_display_data_routine, NULL);
     if (ret != 0) {
         perror("Failed to create thread_display_data");
-        return 1;
+        cleanup();
+        exit(1);
     }
     ret = pthread_create(&thread_display, NULL, thread_display_routine, NULL);
     if (ret != 0) {
         perror("Failed to create thread_display");
-        return 1;
+        cleanup();
+        exit(1);
     }
     ret = pthread_create(&thread_input, NULL, thread_input_routine, NULL);
     if (ret != 0) {
         perror("Failed to create thread_input");
-        return 1;
+        cleanup();
+        exit(1);
     }
 
     // Note: program should not reach this point, as threads will manage program exit
