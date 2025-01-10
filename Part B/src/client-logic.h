@@ -21,6 +21,43 @@
 #include "pthread.h"
 
 /**
+ * @brief Constructs an error message based on the provided error code.
+ *
+ * This function takes an error code and a message buffer, and constructs
+ * a descriptive error message by appending the appropriate error message
+ * string to the buffer.
+ *
+ * @param code The error code indicating the type of error.
+ * @param msg A buffer to store the constructed error message.
+ */
+void find_error(int code, char *msg);
+
+/**
+ * @brief Sends a connect message to the server and processes the response.
+ *
+ * This function sends a connect message using ZeroMQ, waits for the server's response,
+ * and processes it. 
+ * It then sends a message to the ncurses thread with the appropriate text to display.
+ * 
+ * @note This function is not thread-safe.
+ * 
+ * Returns 0 if the connection was successful, or -1 if an error occurred.
+ */
+int send_connect_message();
+
+/**
+ * @brief Handles user key input and communicates with the server.
+ *
+ * Waits for text output to be displayed, processes user input, and sends commands to the server.
+ * Updates player's score based on server's response.
+ * 
+ * @note This function is not thread-safe.
+ * 
+ * @return 1 if client exits, 0 if client continues, or -1 if an error occurs.
+ */
+int handle_key_input();
+
+/**
  * @brief Handles input key events.
  *
  * This function locks the client mutex, sets the input character and marks it as ready,

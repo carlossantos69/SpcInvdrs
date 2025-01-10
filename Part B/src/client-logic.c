@@ -214,7 +214,6 @@ int handle_key_input() {
                 char error_msg[BUFFER_SIZE-25];
                 find_error(response, error_msg);
 
-
                 // Update screen
                 if (show_ncurses) {
                     move(0, 0);

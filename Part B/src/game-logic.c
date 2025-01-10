@@ -40,7 +40,6 @@ int request_publish = 0;
 // Condition variable to signal the publisher thread
 pthread_cond_t publish_cond;
 
-
 // Stores the timestamp of the last game state update
 double last_update_time = 0;
 
