@@ -848,7 +848,15 @@ void send_game_state() {
 }
 
 
-// Note, this function is not thread-safe
+
+/**
+ * @brief Sends score updates for all players using ZeroMQ.
+ *
+ * This function prepares a protobuf structure containing player scores,
+ * serializes it, and sends the serialized data over a ZeroMQ socket.
+ * 
+ * @note This function is not thread-safe.
+ */
 void send_score_updates() {
     // Prepare protobuf structure
     PlayerScore player_scores[MAX_PLAYERS];
@@ -887,17 +895,15 @@ void send_score_updates() {
     free(buffer);
 }
 
+
 /**
- * @brief Sends the game over state message to all displays.
+ * @brief Sends the game over state to all subscribers.
  *
  * This function constructs a message indicating the game is over and includes
- * the final scores of all players. The message is then sent using ZeroMQ.
+ * the final scores of all players. It sends this message to display subscribers
+ * and also sends a protobuf message indicating the game over state.
  *
- * The message format includes:
- * - A game over command.
- * - The final scores of all players who participated in the game.
- *
- * The message is sent via the ZeroMQ publisher socket.
+ * @note This function is not thread-safe.
  */
 void send_game_over_state() {
     char message[BUFFER_SIZE] = "";
@@ -936,6 +942,18 @@ void send_game_over_state() {
     pthread_mutex_unlock(&game_state_lock);
 }
 
+/**
+ * @brief Thread routine for alien movement and game state updates.
+ *
+ * This function is executed by a thread responsible for updating the positions
+ * of aliens in the game and requesting client updates. It runs in a loop until
+ * the game is over, periodically updating alien positions and signaling the
+ * need for a client update. The thread sleeps for a defined interval between
+ * updates.
+ *
+ * @param arg Unused parameter.
+ * @return None.
+ */
 void* thread_alien_routine(void* arg) {
     // Avoid unused parameter warning
     (void)arg;
@@ -963,6 +981,16 @@ void* thread_alien_routine(void* arg) {
     pthread_exit(NULL);
 }
 
+/**
+ * @brief Thread routine to periodically update the game state.
+ *
+ * This function runs in a loop until the game is over. It locks the server mutex,
+ * updates the game state, signals the condition variable to notify clients, and
+ * then sleeps for a specified interval before repeating the process.
+ *
+ * @param arg Unused parameter.
+ * @return None.
+ */
 void* thread_updater_routine(void* arg) {
     // Avoid unused parameter warning
     (void)arg;
@@ -987,11 +1015,22 @@ void* thread_updater_routine(void* arg) {
     pthread_exit(NULL);
 }
 
+/**
+ * @brief Thread routine for listening to client messages and processing them.
+ *
+ * This function runs in a loop until the game is over, receiving messages from clients,
+ * processing them, and sending appropriate responses. It ensures thread safety by using
+ * mutex locks and condition variables to update the game state and signal when a client
+ * update is needed.
+ *
+ * @param arg Unused parameter.
+ * @return None (this function calls pthread_exit() to terminate the thread).
+ */
 void* thread_listener_routine(void* arg) {
     // Avoid unused parameter warning
     (void)arg;
 
-    while (!game_over_server) { // TODO: Mutex needed?
+    while (!game_over_server) {
         // Define safer buffer sizes
         char buffer[BUFFER_SIZE] = {0};
 
@@ -1028,6 +1067,17 @@ void* thread_listener_routine(void* arg) {
     pthread_exit(NULL);
 }
 
+/**
+ * @brief Thread routine for publishing game state and score updates.
+ *
+ * This function runs in a loop until the game is over. It waits for a signal
+ * to publish the game state and score updates to all subscribers. The function
+ * uses a mutex to ensure thread safety and a condition variable to wait for
+ * the publish signal.
+ *
+ * @param arg Unused parameter.
+ * @return void* Always returns NULL.
+ */
 void* thread_publisher_routine(void* arg) {
     // Avoid unused parameter warning
     (void)arg;
@@ -1042,7 +1092,7 @@ void* thread_publisher_routine(void* arg) {
         }
 
         // Send game state to all subscribers
-        // TODO: this functions block in zmq_send while server_lock is locked, is this a problem?
+        // Note: the functions below block until zmq_send is finished, possible speedup can be made
         send_game_state();
         send_score_updates();
         request_publish = 0;
@@ -1070,21 +1120,29 @@ void end_server_logic(){
     pthread_mutex_unlock(&server_lock);
 }
 
+/**
+ * @brief Retrieves the current game state from the server.
+ *
+ * This function locks the game state mutex, copies the current game state
+ * string into the provided buffer, and then unlocks the mutex.
+ *
+ * @param buffer A pointer to a character array where the game state string will be copied.
+ */
 void get_server_game_state(char* buffer) {
     pthread_mutex_lock(&game_state_lock);
     strcpy(buffer, game_state_string);
     pthread_mutex_unlock(&game_state_lock);
 }
 
+
 /**
- * @brief Main server logic loop.
+ * @brief Main server logic function that initializes mutexes, condition variables,
+ *        game state, and creates necessary threads for game operation.
  *
- * This function initializes the game state and enters a loop where it processes
- * client messages, updates the game state, and sends updates to the display.
- * The loop continues until the game is over.
- *
- * @param responder Pointer to the responder socket.
- * @param publisher Pointer to the publisher socket.
+ * @param responder Pointer to the responder object.
+ * @param publisher Pointer to the publisher object.
+ * @param score_publisher Pointer to the score publisher object.
+ * @return int Returns 0 on success, -1 on failure.
  */
 int server_logic(void* responder, void* publisher, void* score_publisher) {
     pthread_t thread_alien;
@@ -1142,13 +1200,6 @@ int server_logic(void* responder, void* publisher, void* score_publisher) {
     //pthread_join(thread_publisher, NULL); // This thread is not joined because it can take some time to end zmq_send and a new update will be requested at gameover
 
     send_game_over_state();
-
-
-    // Destroy mutexes and conditions
-    // TODO: Some mutexes can be blocked so this will block not returning the function. Fix later
-    //pthread_mutex_destroy(&server_lock);
-    //pthread_mutex_destroy(&game_state_lock);
-    //pthread_cond_destroy(&publish_cond);
 
     return 0;
 }

@@ -95,85 +95,79 @@ typedef struct {
     int active;
 } Alien_t;
 
+
 /**
- * @brief Returns the number of seconds since the epoch as a double.
+ * @brief Returns the current time in seconds since the epoch.
  *
- * This function uses the gettimeofday function to get the current time
- * and returns the number of seconds since the epoch (January 1, 1970)
- * as a double.
- *
- * @return The number of seconds since the epoch as a double.
+ * @return The current time in seconds as a double.
  */
 double get_time_in_seconds();
 
 /**
- * @brief Checks if the specified duration has passed since the given time.
+ * @brief Checks if the specified duration has passed since the start time.
  *
- * This function compares the current time with the given time and returns 1
- * if the difference is greater than or equal to the specified duration.
- *
- * @param start_time The start time in seconds since the epoch.
+ * @param start_time The start time in seconds.
  * @param duration The duration to check in seconds.
- * @return int Returns 1 if the duration has passed, 0 otherwise.
+ * @return 1 if the duration has passed, 0 otherwise.
  */
 int has_duration_passed(double start_time, double duration);
 
 /**
- * @brief Finds a player by their unique ID.
- * 
- * @param id The unique ID of the player.
- * @return Player_t* Pointer to the player structure if found, otherwise NULL.
+ * @brief Finds a player by their ID.
+ *
+ * @param id The ID of the player to find.
+ * @return A pointer to the player with the specified ID, or NULL if not found.
  */
 Player_t* find_by_id(const char id);
 
 /**
  * @brief Finds a player by their session token.
- * 
- * @param session_token The session token of the player.
- * @return Player_t* Pointer to the player structure if found, otherwise NULL.
+ *
+ * @param session_token The session token of the player to find.
+ * @return A pointer to the player with the specified session token, or NULL if not found.
  */
 Player_t* find_by_session_token(const char* session_token);
 
 /**
  * @brief Finds a player by their zone.
- * 
- * @param zone The zone of the player.
- * @return Player_t* Pointer to the player structure if found, otherwise NULL.
+ *
+ * @param zone The zone of the player to find.
+ * @return A pointer to the player in the specified zone, or NULL if not found.
  */
 Player_t* find_by_zone(const char zone);
 
 /**
- * @brief Generates a new session token for a player.
- * 
- * @param token Pointer to a character array where the generated token will be stored.
+ * @brief Generates a random session token.
+ *
+ * @param token A pointer to a character array where the generated token will be stored.
  */
 void generate_session_token(char* token);
 
 /**
- * @brief Assigns a unique ID to a player.
- * 
- * @return char The assigned unique ID.
+ * @brief Assigns a unique player ID.
+ *
+ * @return A unique player ID, or '\0' if no IDs are available.
  */
 char assign_player_id();
 
 /**
- * @brief Gets a random zone for a player.
- * 
- * @return int The randomly selected zone.
+ * @brief Selects a random unoccupied zone.
+ *
+ * @return An integer representing the randomly selected unoccupied zone.
  */
 int get_random_zone();
 
 /**
- * @brief Clears the player structure, resetting its values.
- * 
- * @param player Pointer to the player structure to be cleared.
+ * @brief Clears the player's data.
+ *
+ * @param player A pointer to the player to clear.
  */
 void clear_player(Player_t *player);
 
 /**
- * @brief Checks if all aliens have been destroyed in the game.
- * 
- * @return int Returns 1 if all aliens are destroyed, otherwise 0.
+ * @brief Checks if all aliens have been destroyed.
+ *
+ * @return 1 if all aliens are inactive, 0 if at least one alien is still active.
  */
 int all_aliens_destroyed();
 
@@ -183,43 +177,42 @@ int all_aliens_destroyed();
 void initialize_game_state();
 
 /**
- * @brief Checks if a move is valid for a player.
- * 
- * @param player Pointer to the player structure.
+ * @brief Checks if the player's move in the specified direction is valid.
+ *
+ * @param player A pointer to the player.
  * @param direction The direction of the move.
- * @return int Returns 1 if the move is valid, otherwise 0.
+ * @return 1 if the move is valid, 0 otherwise.
  */
 int is_valid_move(Player_t* player, const char direction);
 
 /**
- * @brief Initializes the position of a player.
- * 
- * @param player Pointer to the player structure.
+ * @brief Initializes the player's position based on their zone.
+ *
+ * @param player A pointer to the player.
  */
 void initialize_player_position(Player_t* player);
 
 /**
  * @brief Processes a message from a client and generates a response.
- * 
+ *
  * @param message The message received from the client.
  * @param response The response to be sent back to the client.
- * 
- * @return int Returns 0 if the game state was not updated, 1 if it was updated.
+ * @return 0 if the game state was not updated, 1 if it was updated.
  */
 int process_client_message(char* message, char* response);
 
 /**
- * @brief Checks for collisions between lasers and other objects.
+ * @brief Checks for collisions between lasers and aliens or players.
  */
 void check_laser_collisions();
 
 /**
- * @brief Updates the positions of the aliens in the game.
+ * @brief Updates the positions of active aliens.
  */
 void update_alien_positions();
 
 /**
- * @brief Updates the overall game state.
+ * @brief Updates the game state.
  */
 void update_game_state();
 
@@ -229,7 +222,7 @@ void update_game_state();
 void send_game_state();
 
 /**
- * @brief Sends score updates to all score subscribers.
+ * @brief Sends score updates for all players.
  */
 void send_score_updates();
 
@@ -239,26 +232,58 @@ void send_score_updates();
 void send_game_over_state();
 
 /**
- * @brief Sets the game over flag to end the game.
+ * @brief Thread routine for alien movement and game state updates.
  *
- * This function sets the game over flag to 1, indicating that the game has ended.
- * It is used to stop the game logic loop .
+ * @param arg Unused parameter.
+ * @return None.
+ */
+void* thread_alien_routine(void* arg);
+
+/**
+ * @brief Thread routine to periodically update the game state.
+ *
+ * @param arg Unused parameter.
+ * @return None.
+ */
+void* thread_updater_routine(void* arg);
+
+/**
+ * @brief Thread routine for listening to client messages and processing them.
+ *
+ * @param arg Unused parameter.
+ * @return None.
+ */
+void* thread_listener_routine(void* arg);
+
+/**
+ * @brief Thread routine for publishing game state and score updates.
+ *
+ * @param arg Unused parameter.
+ * @return void* Always returns NULL.
+ */
+void* thread_publisher_routine(void* arg);
+
+/**
+ * @brief Sets the game over flag to end the game.
  */
 void end_server_logic();
 
+/**
+ * @brief Retrieves the current game state from the server.
+ *
+ * @param buffer A pointer to a character array where the game state string will be copied.
+ */
 void get_server_game_state(char* buffer);
 
 /**
- * @brief Main game logic function.
- * 
- * @param resp Pointer to the response object.
- * @param pub Pointer to the publish object.
+ * @brief Main server logic function that initializes mutexes, condition variables,
+ *        game state, and creates necessary threads for game operation.
  *
- * @param score_pub Pointer to the score publish object.
- * 
- * @return 0 when no error, -1 in case of error.
+ * @param responder Pointer to the responder object.
+ * @param publisher Pointer to the publisher object.
+ * @param score_publisher Pointer to the score publisher object.
+ * @return int Returns 0 on success, -1 on failure.
  */
-int server_logic(void* resp, void* pub, void* score_pub);
-
+int server_logic(void* responder, void* publisher, void* score_publisher);
 
 #endif
