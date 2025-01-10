@@ -940,7 +940,7 @@ void* thread_alien_routine(void* arg) {
     // Avoid unused parameter warning
     (void)arg;
 
-    while (!game_over_server) { // TODO: Mutex needed?
+    while (!game_over_server) {
         pthread_mutex_lock(&server_lock);
         // Update aliens positions
         update_alien_positions();
@@ -967,27 +967,20 @@ void* thread_updater_routine(void* arg) {
     // Avoid unused parameter warning
     (void)arg;
 
-    while (!game_over_server) { // TODO: Mutex needed?
+    while (!game_over_server) {
         pthread_mutex_lock(&server_lock);
-        if (has_duration_passed(last_update_time, GAME_UPDATE_INTERVAL / 1000.0)) {
-            last_update_time = get_time_in_seconds();
+        last_update_time = get_time_in_seconds();
 
-            // Update game state
-            update_game_state();
+        // Update game state
+        update_game_state();
 
-            // Request a client update
-            request_publish = 1;
-            pthread_cond_signal(&publish_cond);
-        }
+        // Request a client update
+        request_publish = 1;
+        pthread_cond_signal(&publish_cond);
         pthread_mutex_unlock(&server_lock);
 
-        // TODO: Decide if we need to sleep here
-
-        // Prevent active waiting
-        usleep(50);
-        // TODO: Decide if we keep this or use sleep(GAME_UPDATE_INTERVAL)
-        // TODO: Downsite is we might update game state more than once if a user command triggered an update
-
+        // Sleep until next update
+        usleep(GAME_UPDATE_INTERVAL*1000);
     }
 
     // End of thread
