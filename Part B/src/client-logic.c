@@ -94,6 +94,8 @@ void find_error(int code, char *msg) {
  * and processes it. 
  * It then sends a message to the ncurses thread with the appropriate text to display.
  * 
+ * @note This function is not thread-safe.
+ * 
  * Returns 0 if the connection was successful, or -1 if an error occurred.
  */
 int send_connect_message() {
@@ -156,13 +158,12 @@ int send_connect_message() {
 /**
  * @brief Handles user key input and communicates with the server.
  *
- * This function waits for the text output to be displayed, marks the input as ready,
- * and processes the user input based on the key pressed. It sends the appropriate
- * command to the server using ZeroMQ and updates the player's score based on the server's response.
+ * Waits for text output to be displayed, processes user input, and sends commands to the server.
+ * Updates player's score based on server's response.
  * 
  * @note This function is not thread-safe.
  * 
- * Returns 1 if client exits, 0 if client continues, or -1 if an error occurs(invalid move/zap etc.. is not considered an error).
+ * @return 1 if client exits, 0 if client continues, or -1 if an error occurs.
  */
 int handle_key_input() {
     // Process user input
@@ -249,6 +250,16 @@ int handle_key_input() {
     return -1;
 }
 
+/**
+ * @brief Handles input key events.
+ *
+ * This function locks the client mutex, sets the input character and marks it as ready,
+ * signals the condition variable to notify other threads, and then unlocks the mutex.
+ *
+ * It is used by main programs to send characters to the client logic
+ * 
+ * @param ch The input character to be processed.
+ */
 void input_key(int ch) {
     pthread_mutex_lock(&client_lock);
     input_ch = ch;
@@ -257,10 +268,19 @@ void input_key(int ch) {
     pthread_mutex_unlock(&client_lock);
 }
 
+/**
+ * @brief Main function for the client logic.
+ *
+ * This function initializes the necessary synchronization primitives, sends a connect message to the server,
+ * and enters the main client loop to handle key inputs. It uses a mutex and condition variable to synchronize
+ * input handling. The function will exit if there is a failure in initialization, connection, or if the key
+ * input handling indicates to stop.
+ *
+ * @param requester A pointer to the requester object.
+ * @param ncurses An integer flag indicating whether ncurses mode is enabled.
+ */
 void client_main(void* requester, int ncurses) {
     req = requester;
-
-    int ret;
     show_ncurses = ncurses;
 
     // Initialize mutex and condition variables
@@ -275,7 +295,7 @@ void client_main(void* requester, int ncurses) {
 
 
     // Send connect message and receive player ID
-    ret = send_connect_message();
+    int ret = send_connect_message();
     if (ret == -1) {
         perror("Failed to connect to server");
         return;
