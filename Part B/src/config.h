@@ -28,8 +28,11 @@
 #define SERVER_ENDPOINT_REQ "tcp://*:5555"    // For REQ/REP with astronauts
 #define SERVER_ENDPOINT_PUB "tcp://*:5556"    // For PUB/SUB with display
 #define SERVER_ENDPOINT_SCORES "tcp://*:5557" // For PUB/SUB with scores
+#define SERVER_ENDPOINT_HEARTBEAT "tcp://*:5558" // For PUB/SUB with heartbeat
 #define CLIENT_CONNECT_REQ "tcp://localhost:5555"  // For astronauts to connect
 #define CLIENT_CONNECT_SUB "tcp://localhost:5556"  // For display to connect
+#define CLIENT_CONNECT_HEARTBEAT "tcp://localhost:5558"  // For client heartbeats
+#define HEARTBEAT_FREQUENCY 1 // seconds between heartbeats
 
 // Game Constants
 #define GRID_WIDTH 20

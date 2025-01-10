@@ -28,6 +28,7 @@ void* context;
 void* responder;  // For REQ/REP with astronauts
 void* publisher;  // For PUB/SUB with display
 void* scores_publisher;  // For PUB/SUB with scores
+void* heartbeat_publisher;  // For PUB/SUB with heartbeat
 
 // Flags to indicate thread ending
 pthread_mutex_t lock;
@@ -38,6 +39,7 @@ void cleanup() {
     zmq_close(responder);
     zmq_close(publisher);
     zmq_close(scores_publisher);
+    zmq_close(heartbeat_publisher);
     zmq_ctx_destroy(context);
     zmq_ctx_term(context);
     pthread_mutex_destroy(&lock);
@@ -62,6 +64,27 @@ void* thread_server_routine(void* arg) {
     pthread_mutex_lock(&lock);
     thread_server_finished = true;
     pthread_mutex_unlock(&lock);
+    pthread_exit(NULL);
+}
+
+void* thread_heartbeat_routine(void* arg) {
+    // Avoid unused argument warning
+    (void)arg;
+
+    while (1) {
+        // Send a heartbeat message every second
+        zmq_send(heartbeat_publisher, "H", 1, 0);
+        sleep(HEARTBEAT_FREQUENCY);
+
+        pthread_mutex_lock(&lock);
+        if (thread_server_finished) {
+            pthread_mutex_unlock(&lock);
+            break;
+        }
+        pthread_mutex_unlock(&lock);
+    }
+
+    // End thread
     pthread_exit(NULL);
 }
 
@@ -156,6 +179,7 @@ void* thread_input_routine(void* arg) {
  */
 int main() {
     pthread_t thread_server;
+    pthread_t thread_heartbeat;
     pthread_t thread_display_data;
     pthread_t thread_display;
     pthread_t thread_input;
@@ -172,8 +196,14 @@ int main() {
     publisher = zmq_socket(context, ZMQ_PUB);
     zmq_bind(publisher, SERVER_ENDPOINT_PUB);
 
+    // Set up PUB socket for scores
     scores_publisher = zmq_socket(context, ZMQ_PUB);
     zmq_bind(scores_publisher, SERVER_ENDPOINT_SCORES);
+
+    // Set up PUB socket for heartbeat
+    heartbeat_publisher = zmq_socket(context, ZMQ_PUB);
+    zmq_bind(heartbeat_publisher, SERVER_ENDPOINT_HEARTBEAT);
+
 
     // Initialize the mutex
     if (pthread_mutex_init(&lock, NULL) != 0) {
@@ -186,6 +216,12 @@ int main() {
     ret = pthread_create(&thread_server, NULL, thread_server_routine, NULL);
     if (ret != 0) {
         perror("Failed to create thread_server");
+        cleanup();
+        exit(1);
+    }
+    ret = pthread_create(&thread_heartbeat, NULL, thread_heartbeat_routine, NULL);
+    if (ret != 0) {
+        perror("Failed to create thread_heartbeat");
         cleanup();
         exit(1);
     }
