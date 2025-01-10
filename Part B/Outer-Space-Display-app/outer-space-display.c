@@ -25,7 +25,7 @@
 
 // ZeroMQ subscriber socket
 void* context;
-void* subscriber;
+void* subscriber_gamestate;
 void* subscriber_heartbeat;
 
 // Flags to indicate thread ending
@@ -41,7 +41,7 @@ bool thread_display_finished = false;
  */
 void cleanup() {
     endwin();
-    zmq_close(subscriber);
+    zmq_close(subscriber_gamestate);
     zmq_close(subscriber_heartbeat);
     //zmq_ctx_destroy(context);
     //zmq_ctx_term(context);
@@ -63,7 +63,7 @@ void *thread_comm_routine(void *arg) {
 
 
         char buffer[BUFFER_SIZE];
-        int recv_size = zmq_recv(subscriber, buffer, sizeof(buffer) - 1, ZMQ_DONTWAIT);
+        int recv_size = zmq_recv(subscriber_gamestate, buffer, sizeof(buffer) - 1, 0);
         if (recv_size != -1) {
             buffer[recv_size] = '\0';
             // Copy the message to display
@@ -139,12 +139,24 @@ void* thread_heartbeat_routine(void* arg) {
         char buffer[2];
         int rc = zmq_recv(subscriber_heartbeat, buffer, 1, 0);
         if (rc == -1) {
+            pthread_mutex_lock(&lock);
+            if (thread_display_finished) {
+                pthread_mutex_unlock(&lock);
+                pthread_exit(NULL);
+            }
+            pthread_mutex_unlock(&lock);
             perror("Failed to receive heartbeat");
             cleanup();
             exit(1);
         }
         buffer[rc] = '\0';
         if (strcmp(buffer, "H") != 0) {
+            pthread_mutex_lock(&lock);
+            if (thread_display_finished) {
+                pthread_mutex_unlock(&lock);
+                pthread_exit(NULL);
+            }
+            pthread_mutex_unlock(&lock);
             fprintf(stderr, "Invalid heartbeat received\n");
             cleanup();
             exit(1);
@@ -173,18 +185,18 @@ int main() {
 
     // Initialize ZeroMQ
     context = zmq_ctx_new();
-    subscriber = zmq_socket(context, ZMQ_SUB);
+    subscriber_gamestate = zmq_socket(context, ZMQ_SUB);
     subscriber_heartbeat = zmq_socket(context, ZMQ_SUB);
 
     // Connect to server's PUB socket
-    if (zmq_connect(subscriber, CLIENT_CONNECT_SUB) != 0) {
+    if (zmq_connect(subscriber_gamestate, CLIENT_CONNECT_SUB) != 0) {
         perror("Failed to connect to game server");
         cleanup();
         exit(1);
     }
 
     // Subscribe to all messages
-    zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, "", 0);
+    zmq_setsockopt(subscriber_gamestate, ZMQ_SUBSCRIBE, "", 0);
 
     // Connect to server's heartbeat PUB socket
     if (zmq_connect(subscriber_heartbeat, CLIENT_CONNECT_HEARTBEAT) != 0) {

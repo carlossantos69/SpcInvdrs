@@ -26,8 +26,9 @@
 
 // ZeroMQ subscriber socket
 void* context;
-void* subscriber;
 void* requester;
+void* subscriber_gamestate;
+void* heartbeat_subscriber;
 
 // Flags to indicate thread ending
 pthread_mutex_t lock;
@@ -42,12 +43,13 @@ bool thread_display_finished = false;
  */
 void cleanup() {
     // We need to wait for the display thread to finish message processing
-    zmq_close(subscriber);
-    zmq_close(requester);
-    zmq_ctx_destroy(context);
-    zmq_ctx_term(context);
-    pthread_mutex_destroy(&lock);
     endwin();
+    zmq_close(requester);
+    zmq_close(subscriber_gamestate);
+    zmq_close(heartbeat_subscriber);
+    //zmq_ctx_destroy(context);
+    //zmq_ctx_term(context);
+    pthread_mutex_destroy(&lock);
 }
 
 void *thread_client_routine(void *arg) {
@@ -77,7 +79,7 @@ void *thread_comm_routine(void *arg) {
 
 
         char buffer[BUFFER_SIZE];
-        int recv_size = zmq_recv(subscriber, buffer, sizeof(buffer) - 1, ZMQ_DONTWAIT);
+        int recv_size = zmq_recv(subscriber_gamestate, buffer, sizeof(buffer) - 1, ZMQ_DONTWAIT);
         if (recv_size != -1) {
             buffer[recv_size] = '\0';
             // Copy the message to display
@@ -136,15 +138,56 @@ void *thread_input_routine(void *arg) {
         // TODO: Error here, the program exists right away, 
         // TODO: possibly because thread_display_finished is set before the next getch() 
         // TODO: If thread_display_finished is set before the next getch(), the program will exit
+
+        
         pthread_mutex_lock(&lock);
         if (thread_display_finished) {
             cleanup();
             exit(0);
         }
         pthread_mutex_unlock(&lock);
+        
     }
 }
 
+void* thread_heartbeat_routine(void* arg) {
+    // Avoid unused argument warning
+    (void)arg;
+
+    while (1) {
+        char buffer[2];
+        int rc = zmq_recv(heartbeat_subscriber, buffer, 1, 0);
+        if (rc == -1) {
+            // Do not exit if game is over, will wait for input
+            pthread_mutex_lock(&lock);
+            if (thread_display_finished) {
+                pthread_mutex_unlock(&lock);
+                pthread_exit(NULL);
+            }
+            pthread_mutex_unlock(&lock);
+            perror("Failed to receive heartbeat");
+            cleanup();
+            exit(1);
+        }
+        buffer[rc] = '\0';
+        if (strcmp(buffer, "H") != 0) {
+            // Do not exit if game is over, will wait for input
+            pthread_mutex_lock(&lock);
+            if (thread_display_finished) {
+                pthread_mutex_unlock(&lock);
+                pthread_exit(NULL);
+            }
+            pthread_mutex_unlock(&lock);
+            fprintf(stderr, "Invalid heartbeat received\n");
+            cleanup();
+            exit(1);
+        }
+    }
+
+    // End thread
+    // Note: program should not reach this point
+    pthread_exit(NULL);
+}
 
 /**
  * @brief Main function for the astronaut client application.
@@ -156,12 +199,6 @@ void *thread_input_routine(void *arg) {
  * @return int Exit status of the program.
  */
 int main() {
-    pthread_t thread_client;
-    pthread_t thread_comm;
-    pthread_t thread_display;
-    pthread_t thread_input;
-    int ret;
-
     // Initialize the mutexes
     if (pthread_mutex_init(&lock, NULL) != 0) {
         perror("Mutex init failed");
@@ -171,19 +208,10 @@ int main() {
 
     // Initialize ZeroMQ
     context = zmq_ctx_new();
-    subscriber = zmq_socket(context, ZMQ_SUB);
     requester = zmq_socket(context, ZMQ_REQ);
+    subscriber_gamestate = zmq_socket(context, ZMQ_SUB);
+    heartbeat_subscriber = zmq_socket(context, ZMQ_SUB);
     
-    // Connect to server's PUB socket
-    if (zmq_connect(subscriber, CLIENT_CONNECT_SUB) != 0) {
-        perror("Failed to connect to game server");
-        cleanup();
-        exit(1);
-    }
-
-    // Subscribe to all messages
-    zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, "", 0);
-
     // Connect to server's REQ/REP socket
     if (zmq_connect(requester, CLIENT_CONNECT_REQ) != 0) {
         perror("Failed to connect to server");
@@ -193,7 +221,42 @@ int main() {
         exit(1);
     }
 
+    // Connect to server's PUB socket
+    if (zmq_connect(subscriber_gamestate, CLIENT_CONNECT_SUB) != 0) {
+        perror("Failed to connect to game server");
+        cleanup();
+        exit(1);
+    }
+
+    // Subscribe to all messages
+    zmq_setsockopt(subscriber_gamestate, ZMQ_SUBSCRIBE, "", 0);
+
+    // Connect to server's heartbeat PUB socket
+    if (zmq_connect(heartbeat_subscriber, CLIENT_CONNECT_HEARTBEAT) != 0) {
+        perror("Failed to connect to game server");
+        cleanup();
+        exit(1);
+    }
+
+    // Subscribe to heartbeat messages
+    zmq_setsockopt(heartbeat_subscriber, ZMQ_SUBSCRIBE, "", 0);
+    int timeout = HEARTBEAT_FREQUENCY*2*1000; // Accepting one missed heartbeat
+    zmq_setsockopt(heartbeat_subscriber, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
+
+    // Initialize ncurses
+    initscr();
+    noecho();
+    cbreak();
+    keypad(stdscr, TRUE);
+
     // Create the threads
+    pthread_t thread_client;
+    pthread_t thread_comm;
+    pthread_t thread_display;
+    pthread_t thread_input;
+    pthread_t thread_heartbeat;
+    int ret;
+
     ret = pthread_create(&thread_client, NULL, thread_client_routine, NULL);
     if (ret != 0) {
         perror("Failed to create thread_client");
@@ -212,6 +275,11 @@ int main() {
     ret = pthread_create(&thread_input, NULL, thread_input_routine, NULL);
     if (ret != 0) {
         perror("Failed to create thread_input");
+        return 1;
+    }
+    ret = pthread_create(&thread_heartbeat, NULL, thread_heartbeat_routine, NULL);
+    if (ret != 0) {
+        perror("Failed to create thread_heartbeat");
         return 1;
     }
 

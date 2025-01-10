@@ -27,12 +27,12 @@
 // ZeroMQ socket
 void* context;
 void* requester;
-void* heartbeat_subscriber;
+void* subscriber_heartbeat;
 
 void cleanup() {
     endwin();
     zmq_close(requester);
-    zmq_close(heartbeat_subscriber);
+    zmq_close(subscriber_heartbeat);
     //zmq_ctx_destroy(context);
     //zmq_ctx_term(context);
 }
@@ -73,7 +73,7 @@ void* thread_heartbeat_routine(void* arg) {
 
     while (1) {
         char buffer[2];
-        int rc = zmq_recv(heartbeat_subscriber, buffer, 1, 0);
+        int rc = zmq_recv(subscriber_heartbeat, buffer, 1, 0);
         if (rc == -1) {
             perror("Failed to receive heartbeat");
             cleanup();
@@ -105,7 +105,7 @@ int main() {
     // Initialize ZeroMQ
     context = zmq_ctx_new();
     requester = zmq_socket(context, ZMQ_REQ);
-    heartbeat_subscriber = zmq_socket(context, ZMQ_SUB);
+    subscriber_heartbeat = zmq_socket(context, ZMQ_SUB);
     
     // Connect to server's REQ/REP socket
     if (zmq_connect(requester, CLIENT_CONNECT_REQ) != 0) {
@@ -115,16 +115,16 @@ int main() {
     }
 
     // Connect to server's heartbeat PUB socket
-    if (zmq_connect(heartbeat_subscriber, CLIENT_CONNECT_HEARTBEAT) != 0) {
+    if (zmq_connect(subscriber_heartbeat, CLIENT_CONNECT_HEARTBEAT) != 0) {
         perror("Failed to connect to game server");
         cleanup();
         exit(1);
     }
 
     // Subscribe to heartbeat messages
-    zmq_setsockopt(heartbeat_subscriber, ZMQ_SUBSCRIBE, "", 0);
+    zmq_setsockopt(subscriber_heartbeat, ZMQ_SUBSCRIBE, "", 0);
     int timeout = HEARTBEAT_FREQUENCY*2*1000; // Accepting one missed heartbeat
-    zmq_setsockopt(heartbeat_subscriber, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
+    zmq_setsockopt(subscriber_heartbeat, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
 
     // Initialize ncurses
     initscr();
