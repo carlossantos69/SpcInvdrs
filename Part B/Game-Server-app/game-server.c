@@ -26,9 +26,9 @@
 // ZeroMQ context and sockets
 void* context;
 void* responder;  // For REQ/REP with astronauts
-void* publisher;  // For PUB/SUB with display
-void* scores_publisher;  // For PUB/SUB with scores
-void* heartbeat_publisher;  // For PUB/SUB with heartbeat
+void* publisher_gamestate;  // For PUB/SUB with display
+void* publisher_scores;  // For PUB/SUB with scores
+void* publisher_heartbeat;  // For PUB/SUB with heartbeat
 
 // Flags to indicate thread ending
 pthread_mutex_t lock;
@@ -37,9 +37,9 @@ bool thread_display_finished = false;
 
 void cleanup() {
     zmq_close(responder);
-    zmq_close(publisher);
-    zmq_close(scores_publisher);
-    zmq_close(heartbeat_publisher);
+    zmq_close(publisher_gamestate);
+    zmq_close(publisher_scores);
+    zmq_close(publisher_heartbeat);
     zmq_ctx_destroy(context);
     zmq_ctx_term(context);
     pthread_mutex_destroy(&lock);
@@ -51,7 +51,7 @@ void* thread_server_routine(void* arg) {
     (void)arg;
 
     // Start the game logic
-    int ret = server_logic(responder, publisher, scores_publisher);
+    int ret = server_logic(responder, publisher_gamestate, publisher_scores);
     if (ret != 0) {
         perror("Error in server_logic");
         cleanup();
@@ -73,7 +73,7 @@ void* thread_heartbeat_routine(void* arg) {
 
     while (1) {
         // Send a heartbeat message every second
-        zmq_send(heartbeat_publisher, "H", 1, 0);
+        zmq_send(publisher_heartbeat, "H", 1, 0);
         sleep(HEARTBEAT_FREQUENCY);
 
         pthread_mutex_lock(&lock);
@@ -193,16 +193,16 @@ int main() {
     zmq_bind(responder, SERVER_ENDPOINT_REQ);
 
     // Set up PUB socket for display client
-    publisher = zmq_socket(context, ZMQ_PUB);
-    zmq_bind(publisher, SERVER_ENDPOINT_PUB);
+    publisher_gamestate = zmq_socket(context, ZMQ_PUB);
+    zmq_bind(publisher_gamestate, SERVER_ENDPOINT_PUB);
 
     // Set up PUB socket for scores
-    scores_publisher = zmq_socket(context, ZMQ_PUB);
-    zmq_bind(scores_publisher, SERVER_ENDPOINT_SCORES);
+    publisher_scores = zmq_socket(context, ZMQ_PUB);
+    zmq_bind(publisher_scores, SERVER_ENDPOINT_SCORES);
 
     // Set up PUB socket for heartbeat
-    heartbeat_publisher = zmq_socket(context, ZMQ_PUB);
-    zmq_bind(heartbeat_publisher, SERVER_ENDPOINT_HEARTBEAT);
+    publisher_heartbeat = zmq_socket(context, ZMQ_PUB);
+    zmq_bind(publisher_heartbeat, SERVER_ENDPOINT_HEARTBEAT);
 
 
     // Initialize the mutex
