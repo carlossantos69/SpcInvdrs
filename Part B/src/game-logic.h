@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <zmq.h>
 #include <ctype.h>
+#include "scores.pb-c.h"
 #include "config.h"
 
 /**

@@ -1094,7 +1094,11 @@ void get_server_game_state(char* buffer) {
  * @param publisher Pointer to the publisher socket.
  */
 int server_logic(void* responder, void* publisher, void* score_publisher) {
-    initialize_game_state();
+    pthread_t thread_alien;
+    pthread_t thread_updater;
+    pthread_t thread_listener;
+    pthread_t thread_publisher;
+    int ret;
 
     pub = publisher;
     resp = responder;
@@ -1114,13 +1118,10 @@ int server_logic(void* responder, void* publisher, void* score_publisher) {
         return -1;
     }
 
-    // Create Threads
-    pthread_t thread_alien;
-    pthread_t thread_updater;
-    pthread_t thread_listener;
-    pthread_t thread_publisher;
-    int ret;
+    // Initialize game state
+    initialize_game_state();
 
+    // Create Threads
     ret = pthread_create(&thread_alien, NULL, thread_alien_routine, NULL);
     if (ret != 0) {
         perror("Failed to create thread_alien");
@@ -1141,7 +1142,6 @@ int server_logic(void* responder, void* publisher, void* score_publisher) {
         perror("Failed to create thread_publisher");
         return -1;
     }
-
 
     //pthread_join(thread_alien, NULL); // This thread is not joined because at max it would take ALIEN_MOVE_INTERVAL to finish, delaying the game over
     pthread_join(thread_updater, NULL);

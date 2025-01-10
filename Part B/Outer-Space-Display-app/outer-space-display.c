@@ -28,7 +28,7 @@ void* context;
 void* subscriber;
 
 // Flags to indicate thread ending
-pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t lock;
 bool thread_display_finished = false;
 
 /**
@@ -135,6 +135,13 @@ int main() {
     pthread_t thread_display;
     pthread_t thread_input;
     int ret;
+
+    // Initialize the mutex
+    if (pthread_mutex_init(&lock, NULL) != 0) {
+        perror("Mutex init failed");
+        cleanup();
+        exit(1);
+    }
 
     // Initialize ZeroMQ
     context = zmq_ctx_new();
