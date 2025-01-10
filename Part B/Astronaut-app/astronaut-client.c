@@ -33,8 +33,6 @@ void cleanup() {
     endwin();
     zmq_close(requester);
     zmq_close(subscriber_heartbeat);
-    //zmq_ctx_destroy(context);
-    //zmq_ctx_term(context);
 }
 
 void *thread_client_routine(void *arg) {

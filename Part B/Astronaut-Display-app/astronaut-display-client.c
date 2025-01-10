@@ -47,8 +47,6 @@ void cleanup() {
     zmq_close(requester);
     zmq_close(subscriber_gamestate);
     zmq_close(heartbeat_subscriber);
-    //zmq_ctx_destroy(context);
-    //zmq_ctx_term(context);
     pthread_mutex_destroy(&lock);
 }
 
@@ -246,8 +244,10 @@ int main() {
     // Initialize ncurses
     initscr();
     noecho();
+    curs_set(FALSE); // Hide the cursor
     cbreak();
     keypad(stdscr, TRUE);
+    start_color();
 
     // Create the threads
     pthread_t thread_client;

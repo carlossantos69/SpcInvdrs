@@ -57,14 +57,6 @@ char game_state_display[BUFFER_SIZE];
  * from the rest of the display.
  */
 void initialize_display() {
-    // Initialize ncurses mode
-    initscr();
-    noecho();
-    curs_set(FALSE); // Hide the cursor
-    cbreak();
-    keypad(stdscr, TRUE);
-    start_color();
-
     // Initialize grid to empty spaces
     for (int y = 0; y < GRID_HEIGHT; y++) {
         for (int x = 0; x < GRID_WIDTH; x++) {

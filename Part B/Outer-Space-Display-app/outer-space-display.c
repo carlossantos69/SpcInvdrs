@@ -43,8 +43,6 @@ void cleanup() {
     endwin();
     zmq_close(subscriber_gamestate);
     zmq_close(subscriber_heartbeat);
-    //zmq_ctx_destroy(context);
-    //zmq_ctx_term(context);
     pthread_mutex_destroy(&lock);
 }
 
@@ -170,12 +168,6 @@ void* thread_heartbeat_routine(void* arg) {
 
 
 int main() {
-    pthread_t thread_comm;
-    pthread_t thread_display;
-    pthread_t thread_input;
-    pthread_t thread_heartbeat;
-    int ret;
-
     // Initialize the mutex
     if (pthread_mutex_init(&lock, NULL) != 0) {
         perror("Mutex init failed");
@@ -210,7 +202,20 @@ int main() {
     int timeout = HEARTBEAT_FREQUENCY*2*1000; // Accepting one missed heartbeat
     zmq_setsockopt(subscriber_heartbeat, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
 
+    // Initialize ncurses
+    initscr();
+    noecho();
+    curs_set(FALSE); // Hide the cursor
+    cbreak();
+    keypad(stdscr, TRUE);
+    start_color();
+
     // Create the threads
+    pthread_t thread_comm;
+    pthread_t thread_display;
+    pthread_t thread_input;
+    pthread_t thread_heartbeat;
+    int ret;
     ret = pthread_create(&thread_comm, NULL, thread_comm_routine, NULL);
     if (ret != 0) {
         perror("Failed to create thread_comm");

@@ -212,6 +212,14 @@ int main() {
         exit(1);
     }
 
+    // Initialize ncurses mode
+    initscr();
+    noecho();
+    curs_set(FALSE); // Hide the cursor
+    cbreak();
+    keypad(stdscr, TRUE);
+    start_color();
+
     // Create the threads
     ret = pthread_create(&thread_server, NULL, thread_server_routine, NULL);
     if (ret != 0) {
