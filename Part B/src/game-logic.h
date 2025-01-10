@@ -94,12 +94,6 @@ typedef struct {
     int active;
 } Alien_t;
 
-
-// Extern variables that will be used in other files
-extern char game_state_server[BUFFER_SIZE];
-extern int request_game_over;
-extern pthread_mutex_t server_lock;
-
 /**
  * @brief Returns the number of seconds since the epoch as a double.
  *
@@ -208,8 +202,10 @@ void initialize_player_position(Player_t* player);
  * 
  * @param message The message received from the client.
  * @param response The response to be sent back to the client.
+ * 
+ * @return int Returns 0 if the game state was not updated, 1 if it was updated.
  */
-void process_client_message(char* message, char* response);
+int process_client_message(char* message, char* response);
 
 /**
  * @brief Checks for collisions between lasers and other objects.
@@ -247,15 +243,21 @@ void send_game_over_state();
  * This function sets the game over flag to 1, indicating that the game has ended.
  * It is used to stop the game logic loop .
  */
-void end_game_logic();
+void end_server_logic();
+
+void get_server_game_state(char* buffer);
 
 /**
  * @brief Main game logic function.
  * 
  * @param resp Pointer to the response object.
  * @param pub Pointer to the publish object.
+ *
+ * @param score_pub Pointer to the score publish object.
+ * 
+ * @return 0 when no error, -1 in case of error.
  */
-void game_logic(void* resp, void* pub, void* score_pub);
+int server_logic(void* resp, void* pub, void* score_pub);
 
 
 #endif

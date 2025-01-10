@@ -32,11 +32,14 @@ void* score_pub;  // For PUB/SUB with scores
 Player_t players[MAX_PLAYERS];
 Alien_t aliens[MAX_ALIENS];
 
-// Indicates whether the game is over (1) or not (0)
+// Indicates whether the game is over or not
 int game_over = 0;
 
 // Flag to request the publisher thread to send new game data
 int request_publish = 0;
+// Condition variable to signal the publisher thread
+pthread_cond_t publish_cond;
+
 
 // Stores the timestamp of the last game state update
 double last_update_time = 0;
@@ -47,21 +50,16 @@ double last_kill_time = 0;
 ScoreUpdate score_update = SCORE_UPDATE__INIT;
 
 // Mutex for internal game data
-pthread_mutex_t game_state_lock = PTHREAD_MUTEX_INITIALIZER; // Mutex used to synchronize access to the game state structures
+pthread_mutex_t server_lock; // Mutex used to synchronize access to the game state structures
 
-
-// Data shared with game-server.c:
 
 // String to store the game state
 // It is parsed in the same way as the one passed in ZeroMQ publisher
-// thread_display_data_routine in main() reads and passes to display
-char game_state_server[BUFFER_SIZE];
+// Main aplication uses get_server_game_state to get the game state
+char game_state_string[BUFFER_SIZE];
 
-// Flag used to request game over
-int request_game_over = 0;
-
-// Mutex for server data
-pthread_mutex_t server_lock; // Mutex used to synchronize access to the game state string
+// Mutex for game state string
+pthread_mutex_t game_state_lock; // Mutex used to synchronize access to the game state string
 
 
 /**
@@ -434,8 +432,10 @@ void initialize_player_position(Player_t* player) {
  * Error codes come from config.h constants
  *
  * @note This function is not thread-safe.
+ * 
+ * @return int Returns 0 if game state was not updated, 1 if it was updated.
  */
-void process_client_message(char* message, char* response) {
+int process_client_message(char* message, char* response) {
     if (message[0] == CMD_CONNECT) {
         char new_id = assign_player_id();
         if (new_id != '\0') {
@@ -449,15 +449,13 @@ void process_client_message(char* message, char* response) {
                     initialize_player_position(&players[i]);
 
                     sprintf(response, "%d %c %s", RESP_OK, new_id, players[i].session_token);
-                    //printf("New player %c initialized at (%d,%d) with session token %s\n",new_id, players[i].x, players[i].y, players[i].session_token);
-
-                    return;
+                    return 0;
                 }
             }
         }
         //ERROR Maximum number of players reached
         sprintf(response, "%d", ERR_FULL);
-        return;
+        return 0;
     }
 
     // Validate session token and player ID
@@ -469,21 +467,21 @@ void process_client_message(char* message, char* response) {
     if (num_parsed < 3) {
         //ERROR Missing session token
         sprintf(response, "%d", ERR_INVALID_TOKEN);
-        return;
+        return 0;
     }
 
     // Validate the command string (allowed commands: CONNECT, MOVE, ZAP, DISCONNECT)
     if (cmd != CMD_MOVE && cmd != MSG_ZAP && cmd != CMD_DISCONNECT) {
         //ERROR Unknown command
         sprintf(response, "%d", ERR_UNKNOWN_CMD);
-        return;
+        return 0;
     }
 
     // Validate player_id (should be between 'A' and 'H')
     if (player_id < 'A' || player_id > 'H') {
         //ERROR Invalid player ID
         sprintf(response, "%d", ERR_INVALID_PLAYERID);
-        return;
+        return 0;
     }
 
     // Validate session token characters (should be hexadecimal)
@@ -491,7 +489,7 @@ void process_client_message(char* message, char* response) {
         if (!isxdigit(session_token[i])) {
             //ERROR Invalid session token characters
             sprintf(response, "%d", ERR_INVALID_TOKEN);
-            return;
+            return 0;
         }
     }
 
@@ -499,7 +497,7 @@ void process_client_message(char* message, char* response) {
     if (strlen(session_token) != 32) {
         //ERROR Invalid session token length
         sprintf(response, "%d", ERR_INVALID_TOKEN);
-        return;
+        return 0;
     }
 
     // Find the player based on the provided player ID and session token
@@ -507,12 +505,12 @@ void process_client_message(char* message, char* response) {
     if (!player) {
         //ERROR Invalid player ID
         sprintf(response, "%d", ERR_INVALID_PLAYERID);
-        return;
+        return 0;
     } 
     if (strcmp(player->session_token, session_token) != 0) {
         //ERROR Invalid session token
         sprintf(response, "%d", ERR_INVALID_TOKEN);
-        return;
+        return 0;
     }
 
 
@@ -522,20 +520,20 @@ void process_client_message(char* message, char* response) {
         if (sscanf(message, "%*c %*c %*s %c", &direction) != 1) {
             //ERROR Invalid MOVE command format
             sprintf(response, "%d %d", ERR_INVALID_MOVE, player->score);
-            return;
+            return 0;
         }
 
         if (!has_duration_passed(player->last_stun_time, STUN_DURATION)) {
             //ERROR Player stunned
             sprintf(response, "%d %d", ERR_STUNNED, player->score);
-            return;
+            return 0;
         }
 
         // Validate direction
         if (direction != MOVE_UP && direction != MOVE_DOWN && direction != MOVE_LEFT && direction != MOVE_RIGHT) {
             //ERROR Invalid direction
             sprintf(response, "%d %d", ERR_INVALID_DIR, player->score);
-            return;
+            return 0;
         }
 
         if (is_valid_move(player, direction)) {
@@ -547,19 +545,19 @@ void process_client_message(char* message, char* response) {
         } else {
             //ERROR Invalid move direction
             sprintf(response, "%d %d", ERR_INVALID_MOVE, player->score);
-            return;
+            return 0;
         }
     } else if (cmd == MSG_ZAP)  {
         double current_time = get_time_in_seconds();
         if (!has_duration_passed(player->last_fire_time, LASER_COOLDOWN)) {
             //ERROR Laser cooldown
             sprintf(response, "%d %d", ERR_LASER_COOLDOWN, player->score);
-            return;
+            return 0;
         }
         if (!has_duration_passed(player->last_stun_time, STUN_DURATION)) {
             //ERROR Player stunned
             sprintf(response, "%d %d", ERR_STUNNED, player->score);
-            return;
+            return 0;
         }
 
         player->last_fire_time = current_time;
@@ -590,14 +588,16 @@ void process_client_message(char* message, char* response) {
         // This is done so the client as an updated score as the response
         update_game_state();
         snprintf(response, BUFFER_SIZE, "%d %d", RESP_OK, player->score);
+        return 1;
     } else if (cmd == CMD_DISCONNECT)  {
         clear_player(player);
-        //printf("Player %c disconnected.\n", player->player_id);
         sprintf(response, "%c", RESP_OK);
     } else {
         //ERROR Unknown command
         sprintf(response, "%c", ERR_UNKNOWN_CMD);
+        return 0;
     }
+    return 0;
 }
 
 
@@ -842,9 +842,9 @@ void send_game_state() {
     zmq_send(pub, message, strlen(message), 0);
 
     // Update the game state string
-    pthread_mutex_lock(&server_lock);
-    strcpy(game_state_server, message);
-    pthread_mutex_unlock(&server_lock);
+    pthread_mutex_lock(&game_state_lock);
+    strcpy(game_state_string, message);
+    pthread_mutex_unlock(&game_state_lock);
 }
 
 
@@ -931,9 +931,9 @@ void send_game_over_state() {
     free(buffer);    
 
     // Update the game state string
-    pthread_mutex_lock(&server_lock);
-    strcpy(game_state_server, message);
-    pthread_mutex_unlock(&server_lock);
+    pthread_mutex_lock(&game_state_lock);
+    strcpy(game_state_string, message);
+    pthread_mutex_unlock(&game_state_lock);
 }
 
 void* thread_alien_routine(void* arg) {
@@ -941,13 +941,15 @@ void* thread_alien_routine(void* arg) {
     (void)arg;
 
     while (!game_over) { // TODO: Mutex needed?
-        pthread_mutex_lock(&game_state_lock);
+        pthread_mutex_lock(&server_lock);
         // Update aliens positions
         update_alien_positions();
 
         // Request a client update
         request_publish = 1;
-        pthread_mutex_unlock(&game_state_lock);
+        pthread_cond_signal(&publish_cond);
+
+        pthread_mutex_unlock(&server_lock);
 
         // Sleep until next update
         // Note: It was thought to use has_duration_passed 
@@ -966,7 +968,7 @@ void* thread_updater_routine(void* arg) {
     (void)arg;
 
     while (!game_over) { // TODO: Mutex needed?
-        pthread_mutex_lock(&game_state_lock);
+        pthread_mutex_lock(&server_lock);
         if (has_duration_passed(last_update_time, GAME_UPDATE_INTERVAL / 1000.0)) {
             last_update_time = get_time_in_seconds();
 
@@ -975,15 +977,16 @@ void* thread_updater_routine(void* arg) {
 
             // Request a client update
             request_publish = 1;
+            pthread_cond_signal(&publish_cond);
         }
-        pthread_mutex_unlock(&game_state_lock);
+        pthread_mutex_unlock(&server_lock);
 
         // TODO: Decide if we need to sleep here
 
-        /**
-         * We could think about adding a sleep statement here, but we are using threads and
-         * this would not block other tasks for much time. And leads to better timed updates
-         */
+        // Prevent active waiting
+        usleep(50);
+        // TODO: Decide if we keep this or use sleep(GAME_UPDATE_INTERVAL)
+        // TODO: Downsite is we might update game state more than once if a user command triggered an update
 
     }
 
@@ -1005,14 +1008,17 @@ void* thread_listener_routine(void* arg) {
             buffer[recv_size] = '\0';
             char response[BUFFER_SIZE];
 
-            pthread_mutex_lock(&game_state_lock);
+            pthread_mutex_lock(&server_lock);
             // Process the message and update game state
-            process_client_message(buffer, response);
+            int ret = process_client_message(buffer, response);
 
-            // Request a client update
-            // TODO: Only send if necessary
-            request_publish = 1;
-            pthread_mutex_unlock(&game_state_lock);
+            if (ret) {
+                // Request a client update
+                request_publish = 1;
+                pthread_cond_signal(&publish_cond);
+            }
+
+            pthread_mutex_unlock(&server_lock);
 
             // Send response to client
             zmq_send(resp, response, strlen(response), 0);
@@ -1034,20 +1040,22 @@ void* thread_publisher_routine(void* arg) {
     (void)arg;
 
     while(!game_over) {
-        pthread_mutex_lock(&game_state_lock);
-        if (request_publish) {
-            send_game_state();
-            send_score_updates();
-            request_publish = 0;
-            // TODO: this code blocks game_state_lock but only finishes when zmq send data inside send_game_state and send_score_updates
-            // TODO: Some type of rate limiting?
-        }
-        pthread_mutex_unlock(&game_state_lock);
 
-        /**
-         * We could think about adding a sleep statement here, but we are using threads and
-         * this would not block other tasks for much time.
-         */
+        pthread_mutex_lock(&server_lock);
+
+        // Wait for a signal to publish
+        while (!request_publish) {
+            pthread_cond_wait(&publish_cond, &server_lock);
+        }
+
+        // Send game state to all subscribers
+        // TODO: this functions block in zmq_send while server_lock is locked, is this a problem?
+        send_game_state();
+        send_score_updates();
+        request_publish = 0;
+
+        pthread_mutex_unlock(&server_lock);
+
     }
 
     // End of thread
@@ -1059,15 +1067,24 @@ void* thread_publisher_routine(void* arg) {
  *
  * This function sets the game over flag to 1, indicating that the game has ended.
  * It is used to stop the game logic loop .
+ * 
+ * Is it called by main program when terminal 'q' keypress is received.
+ * 
  */
-void end_game_logic(){
-    pthread_mutex_lock(&game_state_lock);
+void end_server_logic(){
+    pthread_mutex_lock(&server_lock);
     game_over = 1;
+    pthread_mutex_unlock(&server_lock);
+}
+
+void get_server_game_state(char* buffer) {
+    pthread_mutex_lock(&game_state_lock);
+    strcpy(buffer, game_state_string);
     pthread_mutex_unlock(&game_state_lock);
 }
 
 /**
- * @brief Main game logic loop.
+ * @brief Main server logic loop.
  *
  * This function initializes the game state and enters a loop where it processes
  * client messages, updates the game state, and sends updates to the display.
@@ -1076,13 +1093,28 @@ void end_game_logic(){
  * @param responder Pointer to the responder socket.
  * @param publisher Pointer to the publisher socket.
  */
-void game_logic(void* responder, void* publisher, void* score_publisher) {
+int server_logic(void* responder, void* publisher, void* score_publisher) {
     initialize_game_state();
 
     pub = publisher;
     resp = responder;
     score_pub = score_publisher;
 
+    // Intialize mutexes and conditions
+    if (pthread_mutex_init(&server_lock, NULL) != 0) {
+        perror("Failed to initialize server_lock mutex");
+        return -1;
+    }
+    if (pthread_mutex_init(&game_state_lock, NULL) != 0) {
+        perror("Failed to initialize game_state_lock mutex");
+        return -1;
+    }
+    if (pthread_cond_init(&publish_cond, NULL) != 0) {
+        perror("Failed to initialize publish_cond condition variable");
+        return -1;
+    }
+
+    // Create Threads
     pthread_t thread_alien;
     pthread_t thread_updater;
     pthread_t thread_listener;
@@ -1091,27 +1123,23 @@ void game_logic(void* responder, void* publisher, void* score_publisher) {
 
     ret = pthread_create(&thread_alien, NULL, thread_alien_routine, NULL);
     if (ret != 0) {
-        // TODO: Decide what to do in case of error
         perror("Failed to create thread_alien");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     ret = pthread_create(&thread_updater, NULL, thread_updater_routine, NULL);
     if (ret != 0) {
-        // TODO: Decide what to do in case of error
         perror("Failed to create thread_updater");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     ret = pthread_create(&thread_listener, NULL, thread_listener_routine, NULL);
     if (ret != 0) {
-        // TODO: Decide what to do in case of error
         perror("Failed to create thread_listener");
-        exit(EXIT_FAILURE);
+        return -1;
     }
     ret = pthread_create(&thread_publisher, NULL, thread_publisher_routine, NULL);
     if (ret != 0) {
-        // TODO: Decide what to do in case of error
         perror("Failed to create thread_publisher");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
 
@@ -1121,4 +1149,12 @@ void game_logic(void* responder, void* publisher, void* score_publisher) {
     //pthread_join(thread_publisher, NULL); // This thread is not joined because it can take some time to end zmq_send and a new update will be requested at gameover
 
     send_game_over_state();
+
+
+    // Destroy mutexes and conditions
+    pthread_mutex_destroy(&server_lock);
+    pthread_mutex_destroy(&game_state_lock);
+    pthread_cond_destroy(&publish_cond);
+
+    return 0;
 }

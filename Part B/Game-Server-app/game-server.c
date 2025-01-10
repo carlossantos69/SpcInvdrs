@@ -40,7 +40,6 @@ void cleanup() {
     zmq_close(scores_publisher);
     zmq_ctx_destroy(context);
     zmq_ctx_term(context);
-    pthread_mutex_destroy(&server_lock);
     pthread_mutex_destroy(&display_lock);
     pthread_mutex_destroy(&lock);
     endwin();
@@ -50,22 +49,13 @@ void* thread_server_routine(void* arg) {
     // Avoid unused argument warning
     (void)arg;
 
-    // Initialize ZeroMQ context
-    context = zmq_ctx_new();
-
-    // Set up REQ/REP socket for astronaut clients
-    responder = zmq_socket(context, ZMQ_REP);
-    zmq_bind(responder, SERVER_ENDPOINT_REQ);
-
-    // Set up PUB socket for display client
-    publisher = zmq_socket(context, ZMQ_PUB);
-    zmq_bind(publisher, SERVER_ENDPOINT_PUB);
-
-    scores_publisher = zmq_socket(context, ZMQ_PUB);
-    zmq_bind(scores_publisher, SERVER_ENDPOINT_SCORES);
-
     // Start the game logic
-    game_logic(responder, publisher, scores_publisher);
+    int ret = server_logic(responder, publisher, scores_publisher);
+    if (ret != 0) {
+        perror("Error in server_logic");
+        cleanup();
+        exit(1);
+    }
     
     // Note; no need to close the socket or context, as the cleanup function will handle it
 
@@ -88,15 +78,12 @@ void* thread_display_data_routine(void* arg) {
         }
         pthread_mutex_unlock(&lock);
 
+
+        // Copy the game state string in the server to the display
+        // Display will then parse it to get the state
+        // This bypasses the use of sockets for the display created by the game server
         char buffer[BUFFER_SIZE];
-
-        // Copy the game state string in the server to a buffer
-        // This is to release the lock the fastest possible
-        // TODO: Create function to get game state
-        pthread_mutex_lock(&server_lock);
-        strcpy(buffer, game_state_server);
-        pthread_mutex_unlock(&server_lock);
-
+        get_server_game_state(buffer);
 
         // Copy the game state string in the server to the display
         // Display will then parse it to get the state
@@ -135,7 +122,7 @@ void* thread_input_routine(void* arg) {
         if (n > 0) {
             if (ch == 'q' || ch == 'Q') {
                 // End game logic
-                end_game_logic();
+                end_server_logic();
                 break;
             }
 
@@ -178,12 +165,23 @@ int main() {
     pthread_t thread_input;
     int ret;
 
+    // Initialize zeroMQ context
+    context = zmq_ctx_new();
+
+    // Set up REQ/REP socket for astronaut clients
+    responder = zmq_socket(context, ZMQ_REP);
+    zmq_bind(responder, SERVER_ENDPOINT_REQ);
+
+    // Set up PUB socket for display client
+    publisher = zmq_socket(context, ZMQ_PUB);
+    zmq_bind(publisher, SERVER_ENDPOINT_PUB);
+
+    scores_publisher = zmq_socket(context, ZMQ_PUB);
+    zmq_bind(scores_publisher, SERVER_ENDPOINT_SCORES);
+
+
     // Initialize the mutexes
     if (pthread_mutex_init(&display_lock, NULL) != 0) {
-        perror("Mutex init failed");
-        return EXIT_FAILURE;
-    }
-    if (pthread_mutex_init(&server_lock, NULL) != 0) {
         perror("Mutex init failed");
         return EXIT_FAILURE;
     }
