@@ -46,6 +46,16 @@ void cleanup() {
     endwin();
 }
 
+/**
+ * @brief Thread routine for the game server.
+ *
+ * This function serves as the entry point for the game server thread. It starts the game logic
+ * by calling the server_logic function and handles any errors that occur. Upon completion,
+ * it sets the thread_server_finished flag to true and exits the thread.
+ *
+ * @param arg Unused argument.
+ * @return None.
+ */
 void* thread_server_routine(void* arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -67,6 +77,16 @@ void* thread_server_routine(void* arg) {
     pthread_exit(NULL);
 }
 
+/**
+ * @brief Thread routine to send heartbeat messages at regular intervals.
+ *
+ * This function runs in a separate thread and sends a heartbeat message
+ * every second to indicate that the server is alive. It continues to send
+ * these messages until the `thread_server_finished` flag is set to true.
+ *
+ * @param arg Unused argument.
+ * @return void* Always returns NULL when the thread exits.
+ */
 void* thread_heartbeat_routine(void* arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -88,6 +108,18 @@ void* thread_heartbeat_routine(void* arg) {
     pthread_exit(NULL);
 }
 
+/**
+ * @brief Thread routine to display game state data.
+ *
+ * This function runs in a separate thread and continuously updates the display
+ * with the current game state from the server. It locks a mutex to check if the
+ * display thread should finish, copies the game state string from the server to
+ * the display, and then unlocks the mutex. The function will block in 
+ * get_server_game_state or set_display_game_state until data is received or sent.
+ *
+ * @param arg Unused argument.
+ * @return None.
+ */
 void* thread_display_data_routine(void* arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -118,6 +150,15 @@ void* thread_display_data_routine(void* arg) {
 }
 
 
+/**
+ * @brief Thread routine to start the display and mark the display thread as finished.
+ *
+ * This function serves as the entry point for a thread that initializes and starts the display
+ * by calling the `display_main()` function. Once the display is started, it marks the display
+ * thread as finished by setting the `thread_display_finished` flag to true and then exits the thread.
+ *
+ * @param arg Unused argument.
+ */
 void* thread_display_routine(void* arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -132,6 +173,18 @@ void* thread_display_routine(void* arg) {
     pthread_exit(NULL);
 }
 
+/**
+ * @brief Thread routine to handle input from the standard input.
+ *
+ * This function runs in a loop, reading a single character from the standard input.
+ * If the character is 'q' or 'Q', it triggers the end game logic and breaks the loop.
+ * It also checks if either the display or server threads have finished and exits the loop if so.
+ * After exiting the input loop, it enters another loop to check if both game over flags are set,
+ * and if so, it performs cleanup and exits the program.
+ *
+ * @param arg Unused argument.
+ * @return None.
+ */
 void* thread_input_routine(void* arg) {
     // Avoid unused argument warning
     (void)arg;
@@ -168,15 +221,18 @@ void* thread_input_routine(void* arg) {
 }
 
 
+
 /**
- * @brief Main function to start the game server and display.
- *
- * This function creates a new process using fork(). The child process is responsible for
- * the game display, while the parent process handles the game logic. 
- * The parent process sets up REQ/REP and PUB sockets for communication
- * with astronaut clients and the display client, respectively.
- *
- * @return int Returns 0 on successful execution, 1 on failure to fork.
+ * @brief Main function to initialize and run the game server.
+ * 
+ * This function sets up the ZeroMQ context and various sockets for communication
+ * with astronaut clients, display clients, and for broadcasting game state, scores,
+ * and heartbeat signals. It also initializes ncurses for terminal display and creates
+ * multiple threads to handle server operations, heartbeat signals, display data, 
+ * display updates, and user input. The function ensures proper cleanup and resource 
+ * deallocation in case of errors.
+ * 
+ * @return int Exit status of the program.
  */
 int main() {
     pthread_t thread_server;
